@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const postedWithin = searchParams.get("postedWithin") || "";
   const salaryRange = searchParams.get("salaryRange") || "";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-  const limit = Math.min(20, parseInt(searchParams.get("limit") || "12"));
+  const limit = Math.min(500, parseInt(searchParams.get("limit") || "12"));
   const sort = searchParams.get("sort") || "newest";
 
   const where: Record<string, unknown> = {
