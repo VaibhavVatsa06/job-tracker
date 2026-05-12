@@ -25,12 +25,13 @@ export function JobFilters({ filters, onChange, totalJobs }: Props) {
   }
 
   function clearAll() {
-    onChange({ search: filters.search, minExp: 0, maxExp: 10, locations: [], companyTypes: [], jobTypes: [], industries: [], currency: "" });
+    onChange({ search: filters.search, minExp: 0, maxExp: 10, locations: [], companyTypes: [], jobTypes: [], industries: [], currency: "", postedWithin: "", salaryRange: "" });
   }
 
   const activeCount =
     filters.locations.length + filters.companyTypes.length + filters.jobTypes.length + filters.industries.length +
-    (filters.minExp > 0 || filters.maxExp < 10 ? 1 : 0);
+    (filters.minExp > 0 || filters.maxExp < 10 ? 1 : 0) +
+    (filters.postedWithin ? 1 : 0) + (filters.salaryRange ? 1 : 0);
 
   const FilterContent = () => (
     <div className="space-y-5">
@@ -50,6 +51,46 @@ export function JobFilters({ filters, onChange, totalJobs }: Props) {
 
       <div className="text-sm text-slate-500 font-medium bg-slate-50 rounded-lg px-3 py-2">
         {totalJobs} jobs found
+      </div>
+
+      {/* Posted Within */}
+      <div>
+        <p className="text-sm font-semibold text-slate-700 mb-2">Posted Within</p>
+        <div className="flex flex-wrap gap-1.5">
+          {[{ label: "Any", value: "" }, { label: "Today", value: "1" }, { label: "3 days", value: "3" }, { label: "This week", value: "7" }].map(({ label, value }) => (
+            <button key={value} onClick={() => update("postedWithin", value)}
+              className={cn("px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                filters.postedWithin === value
+                  ? "bg-primary-600 text-white border-primary-600"
+                  : "text-slate-600 border-slate-200 hover:border-primary-300"
+              )}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Salary Range */}
+      <div>
+        <p className="text-sm font-semibold text-slate-700 mb-2">Salary (per annum)</p>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { label: "Any", value: "" },
+            { label: "< ₹5L", value: "under5" },
+            { label: "₹5–15L", value: "5to15" },
+            { label: "₹15–30L", value: "15to30" },
+            { label: "₹30L+", value: "above30" },
+          ].map(({ label, value }) => (
+            <button key={value} onClick={() => update("salaryRange", value)}
+              className={cn("px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                filters.salaryRange === value
+                  ? "bg-primary-600 text-white border-primary-600"
+                  : "text-slate-600 border-slate-200 hover:border-primary-300"
+              )}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Experience */}

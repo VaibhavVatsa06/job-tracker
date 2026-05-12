@@ -49,6 +49,8 @@ export interface JobFilters {
   jobTypes: JobType[];
   industries: string[];
   currency: string;
+  postedWithin: string;
+  salaryRange: string;
 }
 
 export interface JobStats {

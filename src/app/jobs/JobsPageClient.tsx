@@ -9,7 +9,7 @@ import type { Job, JobFilters as IFilters } from "@/types";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_FILTERS: IFilters = {
-  search: "", minExp: 0, maxExp: 10, locations: [], companyTypes: [], jobTypes: [], industries: [], currency: "",
+  search: "", minExp: 0, maxExp: 10, locations: [], companyTypes: [], jobTypes: [], industries: [], currency: "", postedWithin: "", salaryRange: "",
 };
 
 export function JobsPageClient() {
@@ -43,6 +43,8 @@ export function JobsPageClient() {
     f.companyTypes.forEach((c) => q.append("companyType", c));
     f.jobTypes.forEach((t) => q.append("jobType", t));
     f.industries.forEach((i) => q.append("industry", i));
+    if (f.postedWithin) q.set("postedWithin", f.postedWithin);
+    if (f.salaryRange) q.set("salaryRange", f.salaryRange);
 
     const res = await fetch(`/api/jobs?${q}`);
     const data = await res.json();

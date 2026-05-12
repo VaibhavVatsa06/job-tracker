@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
   const companyTypes = searchParams.getAll("companyType");
   const jobTypes = searchParams.getAll("jobType");
   const industries = searchParams.getAll("industry");
+  const postedWithin = searchParams.get("postedWithin") || "";
+  const salaryRange = searchParams.get("salaryRange") || "";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
   const limit = Math.min(20, parseInt(searchParams.get("limit") || "12"));
   const sort = searchParams.get("sort") || "newest";
@@ -22,16 +24,33 @@ export async function GET(req: NextRequest) {
 
   if (search) {
     where.OR = [
-      { title: { contains: search } },
-      { company: { contains: search } },
-      { skills: { contains: search } },
-      { location: { contains: search } },
+      { title: { contains: search, mode: "insensitive" } },
+      { company: { contains: search, mode: "insensitive" } },
+      { skills: { contains: search, mode: "insensitive" } },
+      { location: { contains: search, mode: "insensitive" } },
     ];
   }
   if (locations.length) where.city = { in: locations };
   if (companyTypes.length) where.companyType = { in: companyTypes };
   if (jobTypes.length) where.jobType = { in: jobTypes };
   if (industries.length) where.industry = { in: industries };
+
+  if (postedWithin) {
+    const days = parseInt(postedWithin);
+    where.postedAt = { gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
+  }
+
+  if (salaryRange === "under5") {
+    where.salaryMax = { lte: 500000, not: null };
+  } else if (salaryRange === "5to15") {
+    where.salaryMin = { gte: 500000 };
+    where.salaryMax = { lte: 1500000 };
+  } else if (salaryRange === "15to30") {
+    where.salaryMin = { gte: 1500000 };
+    where.salaryMax = { lte: 3000000 };
+  } else if (salaryRange === "above30") {
+    where.salaryMin = { gte: 3000000 };
+  }
 
   const orderBy =
     sort === "salary"
@@ -48,26 +67,11 @@ export async function GET(req: NextRequest) {
       skip: (page - 1) * limit,
       take: limit,
       select: {
-        id: true,
-        title: true,
-        company: true,
-        logoDomain: true,
-        companyType: true,
-        location: true,
-        city: true,
-        country: true,
-        lat: true,
-        lng: true,
-        minExp: true,
-        maxExp: true,
-        salaryMin: true,
-        salaryMax: true,
-        currency: true,
-        jobType: true,
-        industry: true,
-        skills: true,
-        postedAt: true,
-        createdAt: true,
+        id: true, title: true, company: true, logoDomain: true,
+        companyType: true, location: true, city: true, country: true,
+        lat: true, lng: true, minExp: true, maxExp: true,
+        salaryMin: true, salaryMax: true, currency: true,
+        jobType: true, industry: true, skills: true, postedAt: true, createdAt: true,
       },
     }),
   ]);
@@ -81,9 +85,5 @@ export async function GET(req: NextRequest) {
 }
 
 function safeParseSkills(s: string): string[] {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(s); } catch { return []; }
 }
