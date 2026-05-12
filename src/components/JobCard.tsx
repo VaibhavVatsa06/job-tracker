@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
 import { MapPin, Clock, Bookmark, BookmarkCheck, ExternalLink } from "lucide-react";
 import { cn, formatSalary, timeAgo, expLabel, logoUrl, companyTypeColors, jobTypeColors, expColor } from "@/lib/utils";
@@ -42,14 +41,21 @@ export function JobCard({ job, userEmail, isSaved = false, onSaveToggle }: Props
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
-              <Image
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src={logoUrl(job.logoDomain)}
                 alt={job.company}
                 width={40}
                 height={40}
-                className="object-contain"
-                onError={(e) => { (e.target as HTMLImageElement).src = "/default-company.svg"; }}
-                unoptimized
+                className="object-contain w-10 h-10"
+                onError={(e) => {
+                  const img = e.target as HTMLImageElement;
+                  if (job.logoDomain && !img.src.includes("google.com")) {
+                    img.src = `https://www.google.com/s2/favicons?domain=${job.logoDomain}&sz=128`;
+                  } else {
+                    img.src = "/default-company.svg";
+                  }
+                }}
               />
             </div>
             <div>

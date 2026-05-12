@@ -14,6 +14,7 @@ export function MapView({ jobs }: Props) {
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<import("leaflet").LayerGroup | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   // Boot map once
   useEffect(() => {
@@ -39,6 +40,7 @@ export function MapView({ jobs }: Props) {
       const group = L.layerGroup().addTo(map);
       mapRef.current = map;
       markersRef.current = group;
+      setMapReady(true);
     })();
 
     return () => {
@@ -46,9 +48,9 @@ export function MapView({ jobs }: Props) {
     };
   }, []);
 
-  // Re-draw markers when jobs change
+  // Re-draw markers when jobs change or map becomes ready
   useEffect(() => {
-    if (!mapRef.current || !markersRef.current) return;
+    if (!mapReady || !mapRef.current || !markersRef.current) return;
 
     let mounted = true;
     (async () => {
@@ -70,7 +72,7 @@ export function MapView({ jobs }: Props) {
                 box-shadow:0 3px 10px rgba(0,0,0,0.2);
                 display:flex;align-items:center;justify-content:center;cursor:pointer;">
               <img src="https://logo.clearbit.com/${job.logoDomain}"
-                   onerror="this.style.display='none';this.nextSibling.style.display='flex'"
+                   onerror="this.src='https://www.google.com/s2/favicons?domain=${job.logoDomain}&sz=64';this.onerror=function(){this.style.display='none';this.nextSibling.style.display='flex'}"
                    style="width:26px;height:26px;object-fit:contain;border-radius:50%;transform:rotate(45deg);"/>
               <div style="display:none;transform:rotate(45deg);width:26px;height:26px;
                           background:${color}22;border-radius:50%;align-items:center;justify-content:center;
@@ -95,7 +97,7 @@ export function MapView({ jobs }: Props) {
     })();
 
     return () => { mounted = false; };
-  }, [jobs]);
+  }, [jobs, mapReady]);
 
   // Cleanup on unmount
   useEffect(() => {

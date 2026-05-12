@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, Map, BookmarkCheck, Menu, X } from "lucide-react";
+import { Briefcase, Map, BookmarkCheck, Settings, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +9,7 @@ const NAV = [
   { href: "/jobs", label: "Browse Jobs", icon: Briefcase },
   { href: "/map", label: "Job Map", icon: Map },
   { href: "/saved", label: "Saved Jobs", icon: BookmarkCheck },
+  { href: "/admin", label: "Admin", icon: Settings },
 ];
 
 export function Header() {
