@@ -5,3 +5,5 @@ node_modules/
 *.db
 prisma/*.db
 prisma/*.db-journal
+.vercel
+.env*.local
