@@ -1,0 +1,78 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  title       String
+  company     String
+  logoDomain  String?
+  companyType String
+  location    String
+  city        String
+  country     String   @default("India")
+  lat         Float?
+  lng         Float?
+  minExp      Int
+  maxExp      Int
+  salaryMin   Int?
+  salaryMax   Int?
+  currency    String   @default("INR")
+  jobType     String
+  industry    String
+  skills      String
+  description String
+  applyUrl    String
+  source      String   @default("mock")
+  isActive    Boolean  @default(true)
+  postedAt    DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  applications Application[]
+  savedBy      SavedJob[]
+}
+
+model Application {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id])
+  name        String
+  email       String
+  phone       String?
+  resumeUrl   String?
+  coverLetter String?
+  status      String   @default("submitted")
+  createdAt   DateTime @default(now())
+
+  @@unique([jobId, email])
+}
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id])
+  userEmail String
+  createdAt DateTime @default(now())
+
+  @@unique([jobId, userEmail])
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  email     String
+  keywords  String
+  location  String?
+  minExp    Int?
+  maxExp    Int?
+  frequency String   @default("daily")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([email, keywords])
+}
