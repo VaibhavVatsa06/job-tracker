@@ -9,10 +9,10 @@ import { cn, formatSalary, expLabel, logoUrl, jobTypeColors, expColor, timeAgo }
 const MapView = dynamic(() => import("@/components/MapView").then((m) => ({ default: m.MapView })), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-slate-100">
+    <div className="w-full h-full flex items-center justify-center" style={{ background: "#00000f" }}>
       <div className="text-center">
-        <Loader2 className="w-8 h-8 text-primary-600 animate-spin mx-auto mb-2" />
-        <p className="text-sm text-slate-500">Loading map...</p>
+        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mx-auto mb-2" />
+        <p className="text-sm text-indigo-300">Loading globe...</p>
       </div>
     </div>
   ),
@@ -135,20 +135,21 @@ export default function MapPage() {
         {/* Map */}
         <div className="flex-1 relative">
           {loading ? (
-            <div className="w-full h-full flex items-center justify-center bg-slate-50">
+            <div className="w-full h-full flex items-center justify-center" style={{ background: "#00000f" }}>
               <div className="text-center">
-                <Loader2 className="w-10 h-10 text-primary-600 animate-spin mx-auto mb-3" />
-                <p className="text-slate-500 text-sm">Loading jobs…</p>
+                <Loader2 className="w-10 h-10 text-indigo-400 animate-spin mx-auto mb-3" />
+                <p className="text-indigo-300 text-sm">Loading globe…</p>
               </div>
             </div>
           ) : (
             <MapView jobs={filtered} selectedCity={selectedCity} onSelectCity={handleSelectCity} />
           )}
 
-          {/* Map hint overlay when nothing selected */}
+          {/* Globe hint overlay */}
           {!loading && panelMode === "overview" && (
-            <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-xl px-4 py-2.5 text-xs text-slate-600 border border-slate-200 shadow-sm pointer-events-none">
-              Click any marker to explore jobs in that city
+            <div className="absolute bottom-4 left-4 rounded-xl px-4 py-2.5 text-xs pointer-events-none"
+              style={{ background: "rgba(8,12,30,0.85)", color: "#a5b4fc", border: "1px solid rgba(129,140,248,0.3)" }}>
+              🌍 Drag to rotate · Scroll to zoom · Click a dot to explore
             </div>
           )}
         </div>

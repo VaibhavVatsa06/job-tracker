@@ -1,6 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import type { Map as LeafletMap } from "leaflet";
+import { useEffect, useRef } from "react";
 import type { Job } from "@/types";
 
 const CITY_COORDS: Record<string, [number, number]> = {
@@ -28,6 +27,11 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "London": [51.5074, -0.1278],
   "New York": [40.7128, -74.0060],
   "San Francisco": [37.7749, -122.4194],
+  "Berlin": [52.5200, 13.4050],
+  "Toronto": [43.6532, -79.3832],
+  "Amsterdam": [52.3676, 4.9041],
+  "Sydney": [-33.8688, 151.2093],
+  "Tokyo": [35.6762, 139.6503],
 };
 
 function getCoords(job: Job): [number, number] | null {
@@ -47,13 +51,13 @@ function groupByCity(jobs: Job[]): Map<string, { coords: [number, number]; jobs:
   return map;
 }
 
-function markerColor(jobs: Job[]): { from: string; to: string } {
+function cityColor(jobs: Job[]): string {
   const types = jobs.map((j) => j.companyType);
   const startups = types.filter((t) => t === "Startup").length;
   const mncs = types.filter((t) => t === "MNC" || t === "IndianIT").length;
-  if (startups > mncs) return { from: "#f97316", to: "#ea580c" };
-  if (mncs > startups) return { from: "#6366f1", to: "#4f46e5" };
-  return { from: "#8b5cf6", to: "#7c3aed" };
+  if (startups > mncs) return "#f97316";
+  if (mncs > startups) return "#818cf8";
+  return "#a78bfa";
 }
 
 interface Props {
@@ -64,117 +68,142 @@ interface Props {
 
 export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<LeafletMap | null>(null);
-  const markersRef = useRef<import("leaflet").LayerGroup | null>(null);
-  const [mapReady, setMapReady] = useState(false);
+  const globeRef = useRef<any>(null);
+  const onSelectRef = useRef(onSelectCity);
+  onSelectRef.current = onSelectCity;
 
+  // Init globe once
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current || globeRef.current) return;
     let mounted = true;
+
     (async () => {
-      const L = (await import("leaflet")).default;
-      await import("leaflet/dist/leaflet.css" as string);
+      const GlobeGL = (await import("globe.gl")).default;
       if (!mounted || !containerRef.current) return;
 
-      // Inject pulse animation
-      if (!document.getElementById("map-pulse-style")) {
-        const s = document.createElement("style");
-        s.id = "map-pulse-style";
-        s.textContent = `
-          @keyframes mapPulse {
-            0% { transform: scale(1); opacity: 0.7; }
-            100% { transform: scale(2.2); opacity: 0; }
-          }
-          .map-pulse { animation: mapPulse 1.8s ease-out infinite; }
-        `;
-        document.head.appendChild(s);
-      }
+      const el = containerRef.current;
 
-      const map = L.map(containerRef.current, {
-        center: [20.5937, 78.9629],
-        zoom: 5,
-        scrollWheelZoom: true,
-        zoomControl: false,
+      const globe = (GlobeGL as any)()(el)
+        .width(el.offsetWidth)
+        .height(el.offsetHeight)
+        .globeImageUrl("//unpkg.com/three-globe/example/img/earth-blue-marble.jpg")
+        .bumpImageUrl("//unpkg.com/three-globe/example/img/earth-topology.png")
+        .backgroundImageUrl("//unpkg.com/three-globe/example/img/night-sky.png")
+        .showAtmosphere(true)
+        .atmosphereColor("#818cf8")
+        .atmosphereAltitude(0.22)
+        .pointsData([])
+        .pointLat("lat")
+        .pointLng("lng")
+        .pointColor("color")
+        .pointRadius("radius")
+        .pointAltitude("altitude")
+        .pointResolution(16)
+        .pointLabel("label")
+        .onPointClick((point: any) => {
+          globe.controls().autoRotate = false;
+          globe.pointOfView({ lat: point.lat, lng: point.lng, altitude: 1.8 }, 900);
+          onSelectRef.current(point.city, point.jobs);
+        })
+        .ringsData([])
+        .ringLat("lat")
+        .ringLng("lng")
+        .ringColor(() => "#fbbf24")
+        .ringMaxRadius(4)
+        .ringPropagationSpeed(2)
+        .ringRepeatPeriod(900);
+
+      const controls = globe.controls();
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.5;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+
+      // Start camera looking at India
+      globe.pointOfView({ lat: 20, lng: 78, altitude: 2.5 });
+
+      // Responsive resize
+      const ro = new ResizeObserver(() => {
+        if (containerRef.current) {
+          globe.width(containerRef.current.offsetWidth);
+          globe.height(containerRef.current.offsetHeight);
+        }
       });
+      ro.observe(el);
 
-      L.control.zoom({ position: "bottomright" }).addTo(map);
-
-      // CartoDB light tile — cleaner, more stylish
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; <a href="https://carto.com">CARTO</a>',
-        maxZoom: 19,
-      }).addTo(map);
-
-      const group = L.layerGroup().addTo(map);
-      mapRef.current = map;
-      markersRef.current = group;
-      setMapReady(true);
+      (globe as any)._ro = ro;
+      (globe as any)._el = el;
+      globeRef.current = globe;
     })();
-    return () => { mounted = false; };
-  }, []);
 
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !markersRef.current) return;
-    let mounted = true;
-    (async () => {
-      const L = (await import("leaflet")).default;
-      if (!mounted || !markersRef.current) return;
-      markersRef.current.clearLayers();
-
-      const cityMap = groupByCity(jobs);
-
-      cityMap.forEach(({ coords, jobs: cityJobs }, city) => {
-        const count = cityJobs.length;
-        const { from, to } = markerColor(cityJobs);
-        const isSelected = city === selectedCity;
-        const size = count >= 20 ? 52 : count >= 10 ? 46 : count >= 5 ? 40 : 34;
-        const fontSize = count >= 10 ? 14 : 12;
-        const pulse = count >= 5;
-
-        const icon = L.divIcon({
-          html: `
-            <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-              <div style="position:relative;">
-                ${pulse ? `<div class="map-pulse" style="position:absolute;inset:-4px;border-radius:50%;background:${from};pointer-events:none;"></div>` : ""}
-                <div style="
-                  width:${size}px;height:${size}px;border-radius:50%;
-                  background:linear-gradient(135deg,${from},${to});
-                  border:${isSelected ? "3px solid #fff" : "2px solid rgba(255,255,255,0.9)"};
-                  box-shadow:${isSelected ? `0 0 0 3px ${from},0 6px 20px ${from}70` : `0 4px 14px ${from}60`};
-                  display:flex;align-items:center;justify-content:center;
-                  color:white;font-weight:700;font-size:${fontSize}px;
-                  transition:all 0.2s;
-                ">${count}</div>
-              </div>
-              <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid ${to};margin-top:-1px;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.15));"></div>
-              <div style="
-                background:rgba(0,0,0,0.75);color:white;
-                font-size:10px;font-weight:600;
-                padding:2px 6px;border-radius:4px;
-                margin-top:2px;white-space:nowrap;
-                backdrop-filter:blur(4px);
-              ">${city}</div>
-            </div>`,
-          className: "",
-          iconSize: [size + 16, size + 32],
-          iconAnchor: [(size + 16) / 2, size + 32],
-        });
-
-        const marker = L.marker(coords, { icon });
-        marker.addTo(markersRef.current!);
-        marker.on("click", () => onSelectCity(city, cityJobs));
-      });
-    })();
-    return () => { mounted = false; };
-  }, [jobs, mapReady, selectedCity, onSelectCity]);
-
-  useEffect(() => {
     return () => {
-      mapRef.current?.remove();
-      mapRef.current = null;
-      markersRef.current = null;
+      mounted = false;
+      if (globeRef.current) {
+        globeRef.current._ro?.disconnect();
+        if (globeRef.current._el) globeRef.current._el.innerHTML = "";
+        globeRef.current = null;
+      }
     };
   }, []);
 
-  return <div ref={containerRef} className="w-full h-full" />;
+  // Update points and rings whenever jobs or selectedCity changes
+  useEffect(() => {
+    if (!globeRef.current) return;
+
+    const cityMap = groupByCity(jobs);
+    const points: any[] = [];
+    const rings: any[] = [];
+
+    cityMap.forEach(({ coords, jobs: cityJobs }, city) => {
+      const isSelected = city === selectedCity;
+      const count = cityJobs.length;
+      const baseRadius = Math.min(Math.sqrt(count) * 0.38 + 0.22, 1.4);
+
+      points.push({
+        city,
+        lat: coords[0],
+        lng: coords[1],
+        count,
+        jobs: cityJobs,
+        color: isSelected ? "#fbbf24" : cityColor(cityJobs),
+        radius: isSelected ? baseRadius * 1.7 : baseRadius,
+        altitude: isSelected ? 0.08 : 0.02,
+        label: `
+          <div style="
+            background:rgba(8,12,30,0.93);
+            color:white;
+            padding:8px 14px;
+            border-radius:10px;
+            font-size:13px;
+            font-weight:600;
+            border:1px solid rgba(129,140,248,0.5);
+            box-shadow:0 6px 24px rgba(0,0,0,0.7);
+            white-space:nowrap;
+            font-family:Inter,sans-serif;
+            pointer-events:none;
+          ">
+            📍 ${city}
+            <div style="color:#a5b4fc;font-weight:400;font-size:11px;margin-top:3px">
+              ${count} opening${count !== 1 ? "s" : ""}
+            </div>
+          </div>
+        `,
+      });
+
+      if (isSelected) {
+        rings.push({ lat: coords[0], lng: coords[1] });
+      }
+    });
+
+    globeRef.current.pointsData(points);
+    globeRef.current.ringsData(rings);
+  }, [jobs, selectedCity]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full"
+      style={{ background: "#00000f" }}
+    />
+  );
 }
