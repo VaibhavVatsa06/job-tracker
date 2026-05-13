@@ -884,32 +884,39 @@ export default function MapPage() {
 
                 {/* CTAs */}
                 <div className="px-4 py-4 space-y-2">
-                  <Link
-                    href={`/jobs/${selectedJob.id}`}
-                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
-                    style={{
-                      background: "linear-gradient(135deg, #0891b2, #4f46e5)",
-                      color: "white",
-                      boxShadow: "0 0 20px rgba(34,211,238,0.25), 0 4px 12px rgba(0,0,0,0.4)",
-                    }}
-                  >
-                    <Briefcase className="w-4 h-4" /> View Full Profile
-                  </Link>
                   <a
                     href={selectedJob.applyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold transition-all"
+                    style={{
+                      background: "linear-gradient(135deg, #0891b2, #4f46e5)",
+                      color: "white",
+                      boxShadow: "0 0 20px rgba(34,211,238,0.3), 0 4px 14px rgba(0,0,0,0.5)",
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    <ExternalLink className="w-4 h-4" /> Apply Now
+                  </a>
+                  <Link
+                    href={`/jobs/${selectedJob.id}`}
                     className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
                     style={{
                       background: "transparent",
-                      border: `1.5px solid ${DARK.borderStrong}`,
-                      color: DARK.cyan,
+                      border: `1.5px solid ${DARK.border}`,
+                      color: DARK.textSub,
                     }}
-                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = DARK.cyanDim)}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = DARK.borderStrong;
+                      (e.currentTarget as HTMLElement).style.color = DARK.text;
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = DARK.border;
+                      (e.currentTarget as HTMLElement).style.color = DARK.textSub;
+                    }}
                   >
-                    <ExternalLink className="w-4 h-4" /> Apply on Company Site
-                  </a>
+                    <Briefcase className="w-4 h-4" /> View Full Details
+                  </Link>
                 </div>
               </div>
             </>

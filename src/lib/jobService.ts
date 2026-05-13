@@ -267,21 +267,141 @@ export async function fetchFromRemotive(): Promise<number> {
   return total;
 }
 
+// ── Greenhouse ─────────────────────────────────────────────────────────────
+// Public Greenhouse job board API — no key needed
+const GREENHOUSE_COMPANIES: { slug: string; name: string; domain: string }[] = [
+  { slug: "airbnb", name: "Airbnb", domain: "airbnb.com" },
+  { slug: "stripe", name: "Stripe", domain: "stripe.com" },
+  { slug: "figma", name: "Figma", domain: "figma.com" },
+  { slug: "discord", name: "Discord", domain: "discord.com" },
+  { slug: "notion", name: "Notion", domain: "notion.so" },
+  { slug: "lyft", name: "Lyft", domain: "lyft.com" },
+  { slug: "twilio", name: "Twilio", domain: "twilio.com" },
+  { slug: "hashicorp", name: "HashiCorp", domain: "hashicorp.com" },
+  { slug: "mongodb", name: "MongoDB", domain: "mongodb.com" },
+  { slug: "elastic", name: "Elastic", domain: "elastic.co" },
+  { slug: "cloudflare", name: "Cloudflare", domain: "cloudflare.com" },
+  { slug: "databricks", name: "Databricks", domain: "databricks.com" },
+  { slug: "snowflake", name: "Snowflake", domain: "snowflake.com" },
+  { slug: "hubspot", name: "HubSpot", domain: "hubspot.com" },
+  { slug: "gitlab", name: "GitLab", domain: "gitlab.com" },
+  { slug: "zendesk", name: "Zendesk", domain: "zendesk.com" },
+  { slug: "duolingo", name: "Duolingo", domain: "duolingo.com" },
+  { slug: "canva", name: "Canva", domain: "canva.com" },
+  { slug: "coinbase", name: "Coinbase", domain: "coinbase.com" },
+  { slug: "doordash", name: "DoorDash", domain: "doordash.com" },
+];
+
+function parseGreenhouseCity(locationName: string | undefined): string {
+  if (!locationName) return "Remote";
+  const l = locationName.toLowerCase();
+  if (l.includes("remote")) return "Remote";
+  const cityMap: Record<string, string> = {
+    "san francisco": "San Francisco", "new york": "New York", "seattle": "Seattle",
+    "austin": "Austin", "toronto": "Toronto", "london": "London",
+    "amsterdam": "Amsterdam", "berlin": "Berlin", "paris": "Paris",
+    "singapore": "Singapore", "sydney": "Sydney", "bangalore": "Bangalore",
+    "bengaluru": "Bangalore", "hyderabad": "Hyderabad", "dubai": "Dubai",
+    "tokyo": "Tokyo",
+  };
+  for (const [key, city] of Object.entries(cityMap)) {
+    if (l.includes(key)) return city;
+  }
+  return locationName.split(",")[0].trim();
+}
+
+function parseGreenhouseCountry(locationName: string | undefined): string {
+  if (!locationName) return "USA";
+  const l = locationName.toLowerCase();
+  if (l.includes("india") || l.includes("bangalore") || l.includes("hyderabad")) return "India";
+  if (l.includes("uk") || l.includes("london") || l.includes("united kingdom")) return "UK";
+  if (l.includes("singapore")) return "Singapore";
+  if (l.includes("australia") || l.includes("sydney")) return "Australia";
+  if (l.includes("germany") || l.includes("berlin")) return "Germany";
+  if (l.includes("canada") || l.includes("toronto")) return "Canada";
+  return "USA";
+}
+
+export async function fetchFromGreenhouse(): Promise<number> {
+  let total = 0;
+
+  for (const company of GREENHOUSE_COMPANIES) {
+    try {
+      const res = await axios.get(
+        `https://boards-api.greenhouse.io/v1/boards/${company.slug}/jobs`,
+        { timeout: 8000 }
+      );
+
+      const jobs: any[] = res.data?.jobs ?? [];
+
+      for (const j of jobs) {
+        const id = `greenhouse-${company.slug}-${j.id}`;
+        const city = parseGreenhouseCity(j.location?.name);
+        const isRemote = city === "Remote";
+
+        const jobData = {
+          title: j.title ?? "Software Engineer",
+          company: company.name,
+          logoDomain: company.domain,
+          companyType: inferCompanyType(company.name, undefined),
+          location: j.location?.name || company.name,
+          city,
+          country: parseGreenhouseCountry(j.location?.name),
+          lat: null as null,
+          lng: null as null,
+          minExp: 0,
+          maxExp: 5,
+          salaryMin: null as null,
+          salaryMax: null as null,
+          currency: "USD",
+          jobType: isRemote ? "Remote" : ("Full-time" as const),
+          industry: inferIndustry(j.title),
+          skills: JSON.stringify(extractSkillsFromTitle(j.title)),
+          description: (j.content ?? "").replace(/<[^>]+>/g, "").slice(0, 2000),
+          applyUrl: j.absolute_url ?? `https://boards.greenhouse.io/${company.slug}`,
+          source: "greenhouse",
+          isActive: true,
+          postedAt: j.updated_at ? new Date(j.updated_at) : new Date(),
+        };
+
+        try {
+          await prisma.job.upsert({
+            where: { id },
+            update: { isActive: true, updatedAt: new Date() },
+            create: { id, ...jobData },
+          });
+          total++;
+        } catch { /* skip duplicates */ }
+      }
+    } catch (err) {
+      console.error(`[Greenhouse] ${company.slug}:`, (err as Error).message);
+    }
+    await sleep(200);
+  }
+
+  return total;
+}
+
 // Run all sources in parallel and return total new jobs
 export async function fetchAllSources(): Promise<{ total: number; breakdown: Record<string, number> }> {
-  const [jsearch, adzuna, remotive] = await Promise.allSettled([
+  const [jsearch, adzuna, remotive, greenhouse] = await Promise.allSettled([
     fetchFromJSearch(),
     fetchFromAdzuna(),
     fetchFromRemotive(),
+    fetchFromGreenhouse(),
   ]);
 
   const counts = {
     jsearch: jsearch.status === "fulfilled" ? jsearch.value : 0,
     adzuna: adzuna.status === "fulfilled" ? adzuna.value : 0,
     remotive: remotive.status === "fulfilled" ? remotive.value : 0,
+    greenhouse: greenhouse.status === "fulfilled" ? greenhouse.value : 0,
   };
 
-  return { total: counts.jsearch + counts.adzuna + counts.remotive, breakdown: counts };
+  return {
+    total: counts.jsearch + counts.adzuna + counts.remotive + counts.greenhouse,
+    breakdown: counts,
+  };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

@@ -131,7 +131,7 @@ function buildMarkerEl(
   }).join("");
 
   const wrapper = document.createElement("div");
-  wrapper.style.cssText = "cursor:pointer;transform:translate(-50%,-50%);position:relative;";
+  wrapper.style.cssText = "cursor:pointer;transform:translate(-50%,-50%);position:relative;pointer-events:auto;";
 
   wrapper.innerHTML = `
     <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
