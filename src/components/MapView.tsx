@@ -315,8 +315,13 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
       });
       ro.observe(el);
 
+      // Prevent browser page zoom — let the globe's OrbitControls handle wheel events
+      const blockBrowserZoom = (e: WheelEvent) => e.preventDefault();
+      el.addEventListener("wheel", blockBrowserZoom, { passive: false });
+
       (globe as any)._ro = ro;
       (globe as any)._el = el;
+      (globe as any)._wheelListener = blockBrowserZoom;
       globeRef.current = globe;
       setGlobeReady(true);
     })();
@@ -325,7 +330,10 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
       mounted = false;
       if (globeRef.current) {
         globeRef.current._ro?.disconnect();
-        if (globeRef.current._el) globeRef.current._el.innerHTML = "";
+        if (globeRef.current._el) {
+          globeRef.current._el.removeEventListener("wheel", globeRef.current._wheelListener);
+          globeRef.current._el.innerHTML = "";
+        }
         globeRef.current = null;
       }
     };
@@ -350,6 +358,6 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
   }, [jobs, selectedCity, globeReady]);
 
   return (
-    <div ref={containerRef} className="w-full h-full" style={{ background: "#0f172a" }} />
+    <div ref={containerRef} className="w-full h-full" style={{ background: "#0f172a", touchAction: "none" }} />
   );
 }
