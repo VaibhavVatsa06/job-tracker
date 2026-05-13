@@ -83,16 +83,27 @@ export default function AdminPage() {
 
       {/* API key status */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-4">
           <Key className="w-4 h-4 text-slate-500" />
-          <h2 className="font-semibold text-slate-900">Live Job API Status</h2>
+          <h2 className="font-semibold text-slate-900">Job Sources</h2>
         </div>
-        <p className="text-sm text-slate-600 mb-2">
-          Live jobs are fetched from <strong>JSearch (RapidAPI)</strong> using the <code className="bg-slate-100 px-1 rounded text-xs">RAPIDAPI_KEY</code> env variable.
-        </p>
-        <div className="flex flex-wrap gap-2 text-xs">
-          <span className="px-2 py-1 bg-slate-100 rounded font-mono">RAPIDAPI_HOST = jsearch.p.rapidapi.com</span>
-          <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded">Free tier: 200 req/month</span>
+        <div className="space-y-3 text-sm">
+          {[
+            { name: "JSearch (RapidAPI)", key: "RAPIDAPI_KEY", limit: "200 req/month", color: "blue" },
+            { name: "Adzuna", key: "ADZUNA_APP_ID + ADZUNA_APP_KEY", limit: "250 req/day", color: "orange" },
+            { name: "Remotive", key: "No key needed", limit: "Unlimited (remote jobs)", color: "purple" },
+            { name: "Greenhouse", key: "No key needed", limit: "Public boards API", color: "green" },
+          ].map(({ name, key, limit, color }) => (
+            <div key={name} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+              <div>
+                <p className="font-medium text-slate-800">{name}</p>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">{key}</p>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full bg-${color}-50 text-${color}-700 border border-${color}-100 whitespace-nowrap`}>
+                {limit}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -100,7 +111,7 @@ export default function AdminPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="font-semibold text-slate-900 mb-2">Manual Refresh</h2>
         <p className="text-sm text-slate-600 mb-4">
-          Fetches today&apos;s jobs across 10 search queries (software, data, devops, product, etc.). Requires <code className="bg-slate-100 px-1 rounded text-xs">RAPIDAPI_KEY</code> to be set.
+          Fetches jobs from all 4 sources in parallel: JSearch, Adzuna, Remotive, and Greenhouse. Greenhouse works even without API keys.
         </p>
         <button
           onClick={triggerRefresh}
@@ -112,18 +123,20 @@ export default function AdminPage() {
         </button>
 
         {result && (
-          <div className={`mt-4 p-4 rounded-xl border flex items-start gap-3 ${result.success ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
-            {result.success
-              ? <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-              : <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            }
-            <div>
-              <p className={`text-sm font-semibold ${result.success ? "text-emerald-800" : "text-red-800"}`}>
-                {result.success ? "Success" : "Error"}
-              </p>
-              <p className={`text-sm mt-0.5 ${result.success ? "text-emerald-700" : "text-red-700"}`}>
-                {result.message || result.error}
-              </p>
+          <div className={`mt-4 p-4 rounded-xl border ${result.success ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+            <div className="flex items-start gap-3">
+              {result.success
+                ? <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                : <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              }
+              <div className="flex-1">
+                <p className={`text-sm font-semibold ${result.success ? "text-emerald-800" : "text-red-800"}`}>
+                  {result.success ? `✓ Fetched ${result.added} new jobs` : "Error"}
+                </p>
+                <p className={`text-sm mt-0.5 ${result.success ? "text-emerald-700" : "text-red-700"}`}>
+                  {result.message || result.error}
+                </p>
+              </div>
             </div>
           </div>
         )}
