@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Job } from "@/types";
 
 const CITY_COORDS: Record<string, [number, number]> = {
@@ -169,6 +169,7 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<any>(null);
   const onSelectRef = useRef(onSelectCity);
+  const [globeReady, setGlobeReady] = useState(false);
   onSelectRef.current = onSelectCity;
 
   // Init globe once
@@ -233,6 +234,7 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
       (globe as any)._ro = ro;
       (globe as any)._el = el;
       globeRef.current = globe;
+      setGlobeReady(true);
     })();
 
     return () => {
@@ -246,8 +248,9 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
   }, []);
 
   // Update markers and rings when jobs or selected city changes
+  // globeReady in deps ensures this re-runs once the async globe init completes
   useEffect(() => {
-    if (!globeRef.current) return;
+    if (!globeReady || !globeRef.current) return;
 
     const cityMap = groupByCity(jobs);
     const markers: any[] = [];
@@ -269,7 +272,7 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
 
     globeRef.current.htmlElementsData(markers);
     globeRef.current.ringsData(rings);
-  }, [jobs, selectedCity]);
+  }, [jobs, selectedCity, globeReady]);
 
   return (
     <div
