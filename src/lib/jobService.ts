@@ -34,76 +34,68 @@ const DAILY_QUERIES = [
   "frontend developer react angular jobs India",
 ];
 
+async function fetchOneJSearch(q: string, apiKey: string): Promise<number> {
+  try {
+    const res = await axios.get("https://jsearch.p.rapidapi.com/search", {
+      headers: {
+        "X-RapidAPI-Key": apiKey,
+        "X-RapidAPI-Host": process.env.RAPIDAPI_HOST || "jsearch.p.rapidapi.com",
+      },
+      params: { query: q, page: "1", num_pages: "1", date_posted: "today" },
+      timeout: 8000,
+    });
+    const jobs = res.data?.data ?? [];
+    let count = 0;
+    for (const j of jobs) {
+      const expMonths = j.job_required_experience?.required_experience_in_months ?? 0;
+      const minExp = Math.max(1, Math.floor(expMonths / 12));
+      const maxExp = Math.min(10, minExp + 2);
+      const jobData = {
+        title: j.job_title ?? "Software Engineer",
+        company: j.employer_name ?? "Unknown Company",
+        logoDomain: extractDomain(j.employer_website),
+        companyType: inferCompanyType(j.employer_name, j.employer_company_type),
+        location: buildLocation(j.job_city, j.job_state, j.job_country),
+        city: normalizeCity(j.job_city, j.job_is_remote),
+        country: j.job_country || "India",
+        lat: j.job_latitude ?? null,
+        lng: j.job_longitude ?? null,
+        minExp, maxExp,
+        salaryMin: j.job_min_salary ? Math.round(j.job_min_salary) : null,
+        salaryMax: j.job_max_salary ? Math.round(j.job_max_salary) : null,
+        currency: j.job_salary_currency || "INR",
+        jobType: normalizeJobType(j.job_employment_type, j.job_is_remote),
+        industry: inferIndustry(j.job_title),
+        skills: JSON.stringify(extractSkills(j)),
+        description: j.job_description ?? "",
+        applyUrl: j.job_apply_link || j.job_google_link || "#",
+        source: "jsearch",
+        isActive: true,
+        postedAt: j.job_posted_at_datetime_utc ? new Date(j.job_posted_at_datetime_utc) : new Date(),
+      };
+      try {
+        await prisma.job.upsert({
+          where: { id: j.job_id },
+          update: { isActive: true, updatedAt: new Date() },
+          create: { id: j.job_id, ...jobData },
+        });
+        count++;
+      } catch { /* skip */ }
+    }
+    return count;
+  } catch (err) {
+    console.error(`[JSearch] "${q}":`, (err as Error).message);
+    return 0;
+  }
+}
+
 export async function fetchFromJSearch(query?: string): Promise<number> {
   const apiKey = process.env.RAPIDAPI_KEY;
   if (!apiKey) return 0;
-
   const queries = query ? [query] : DAILY_QUERIES;
-  let totalCreated = 0;
-
-  for (const q of queries) {
-    try {
-      const res = await axios.get("https://jsearch.p.rapidapi.com/search", {
-        headers: {
-          "X-RapidAPI-Key": apiKey,
-          "X-RapidAPI-Host": process.env.RAPIDAPI_HOST || "jsearch.p.rapidapi.com",
-        },
-        params: { query: q, page: "1", num_pages: "1", date_posted: "today" },
-        timeout: 10000,
-      });
-
-      const jobs = res.data?.data ?? [];
-
-      for (const j of jobs) {
-        const expMonths = j.job_required_experience?.required_experience_in_months ?? 0;
-        const minExp = Math.max(1, Math.floor(expMonths / 12));
-        const maxExp = Math.min(10, minExp + 2);
-
-        const jobData = {
-          title: j.job_title ?? "Software Engineer",
-          company: j.employer_name ?? "Unknown Company",
-          logoDomain: extractDomain(j.employer_website),
-          companyType: inferCompanyType(j.employer_name, j.employer_company_type),
-          location: buildLocation(j.job_city, j.job_state, j.job_country),
-          city: normalizeCity(j.job_city, j.job_is_remote),
-          country: j.job_country || "India",
-          lat: j.job_latitude ?? null,
-          lng: j.job_longitude ?? null,
-          minExp,
-          maxExp,
-          salaryMin: j.job_min_salary ? Math.round(j.job_min_salary) : null,
-          salaryMax: j.job_max_salary ? Math.round(j.job_max_salary) : null,
-          currency: j.job_salary_currency || "INR",
-          jobType: normalizeJobType(j.job_employment_type, j.job_is_remote),
-          industry: inferIndustry(j.job_title),
-          skills: JSON.stringify(extractSkills(j)),
-          description: j.job_description ?? "",
-          applyUrl: j.job_apply_link || j.job_google_link || "#",
-          source: "jsearch",
-          isActive: true,
-          postedAt: j.job_posted_at_datetime_utc ? new Date(j.job_posted_at_datetime_utc) : new Date(),
-        };
-
-        try {
-          await prisma.job.upsert({
-            where: { id: j.job_id },
-            update: { isActive: true, updatedAt: new Date() },
-            create: { id: j.job_id, ...jobData },
-          });
-          totalCreated++;
-        } catch {
-          // skip if upsert fails for this record
-        }
-      }
-    } catch (err) {
-      console.error(`[JSearch] Error for query "${q}":`, (err as Error).message);
-    }
-
-    // Small delay between requests to respect rate limits
-    await sleep(500);
-  }
-
-  return totalCreated;
+  // Run all queries in parallel — cuts 10×500ms serial into ~1 RTT
+  const results = await Promise.allSettled(queries.map((q) => fetchOneJSearch(q, apiKey)));
+  return results.reduce((sum, r) => sum + (r.status === "fulfilled" ? r.value : 0), 0);
 }
 
 // ── Adzuna API (free, covers India + global) ───────────────────────────────
@@ -322,64 +314,70 @@ function parseGreenhouseCountry(locationName: string | undefined): string {
   return "USA";
 }
 
-export async function fetchFromGreenhouse(): Promise<number> {
-  let total = 0;
+async function fetchOneGreenhouse(company: { slug: string; name: string; domain: string }): Promise<number> {
+  try {
+    const res = await axios.get(
+      `https://boards-api.greenhouse.io/v1/boards/${company.slug}/jobs`,
+      { timeout: 8000 }
+    );
+    const jobs: any[] = res.data?.jobs ?? [];
+    let count = 0;
 
-  for (const company of GREENHOUSE_COMPANIES) {
-    try {
-      const res = await axios.get(
-        `https://boards-api.greenhouse.io/v1/boards/${company.slug}/jobs`,
-        { timeout: 8000 }
-      );
+    for (const j of jobs) {
+      const id = `greenhouse-${company.slug}-${j.id}`;
+      const city = parseGreenhouseCity(j.location?.name);
+      const isRemote = city === "Remote";
 
-      const jobs: any[] = res.data?.jobs ?? [];
+      const jobData = {
+        title: j.title ?? "Software Engineer",
+        company: company.name,
+        logoDomain: company.domain,
+        companyType: inferCompanyType(company.name, undefined),
+        location: j.location?.name || company.name,
+        city,
+        country: parseGreenhouseCountry(j.location?.name),
+        lat: null as null,
+        lng: null as null,
+        minExp: 0,
+        maxExp: 5,
+        salaryMin: null as null,
+        salaryMax: null as null,
+        currency: "USD",
+        jobType: isRemote ? "Remote" : ("Full-time" as const),
+        industry: inferIndustry(j.title),
+        skills: JSON.stringify(extractSkillsFromTitle(j.title)),
+        description: (j.content ?? "").replace(/<[^>]+>/g, "").slice(0, 2000),
+        applyUrl: j.absolute_url ?? `https://boards.greenhouse.io/${company.slug}`,
+        source: "greenhouse",
+        isActive: true,
+        postedAt: j.updated_at ? new Date(j.updated_at) : new Date(),
+      };
 
-      for (const j of jobs) {
-        const id = `greenhouse-${company.slug}-${j.id}`;
-        const city = parseGreenhouseCity(j.location?.name);
-        const isRemote = city === "Remote";
-
-        const jobData = {
-          title: j.title ?? "Software Engineer",
-          company: company.name,
-          logoDomain: company.domain,
-          companyType: inferCompanyType(company.name, undefined),
-          location: j.location?.name || company.name,
-          city,
-          country: parseGreenhouseCountry(j.location?.name),
-          lat: null as null,
-          lng: null as null,
-          minExp: 0,
-          maxExp: 5,
-          salaryMin: null as null,
-          salaryMax: null as null,
-          currency: "USD",
-          jobType: isRemote ? "Remote" : ("Full-time" as const),
-          industry: inferIndustry(j.title),
-          skills: JSON.stringify(extractSkillsFromTitle(j.title)),
-          description: (j.content ?? "").replace(/<[^>]+>/g, "").slice(0, 2000),
-          applyUrl: j.absolute_url ?? `https://boards.greenhouse.io/${company.slug}`,
-          source: "greenhouse",
-          isActive: true,
-          postedAt: j.updated_at ? new Date(j.updated_at) : new Date(),
-        };
-
-        try {
-          await prisma.job.upsert({
-            where: { id },
-            update: { isActive: true, updatedAt: new Date() },
-            create: { id, ...jobData },
-          });
-          total++;
-        } catch { /* skip duplicates */ }
-      }
-    } catch (err) {
-      console.error(`[Greenhouse] ${company.slug}:`, (err as Error).message);
+      try {
+        await prisma.job.upsert({
+          where: { id },
+          update: { isActive: true, updatedAt: new Date() },
+          create: { id, ...jobData },
+        });
+        count++;
+      } catch { /* skip duplicates */ }
     }
-    await sleep(200);
+    return count;
+  } catch (err) {
+    console.error(`[Greenhouse] ${company.slug}:`, (err as Error).message);
+    return 0;
   }
+}
 
-  return total;
+export async function fetchFromGreenhouse(): Promise<number> {
+  // All companies fetched in parallel — brings 40s serial down to ~3s
+  const results = await Promise.allSettled(
+    GREENHOUSE_COMPANIES.map((c) => fetchOneGreenhouse(c))
+  );
+  return results.reduce(
+    (sum, r) => sum + (r.status === "fulfilled" ? r.value : 0),
+    0
+  );
 }
 
 // Run all sources in parallel and return total new jobs
