@@ -15,13 +15,10 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "Jaipur": [26.9124, 75.7873],
   "Chandigarh": [30.7333, 76.7794],
   "Noida": [28.5355, 77.3910],
-  "Gurgaon": [28.4595, 77.0266],
   "Gurugram": [28.4595, 77.0266],
   "Coimbatore": [11.0168, 76.9558],
   "Indore": [22.7196, 75.8577],
   "Nagpur": [21.1458, 79.0882],
-  "Bhubaneswar": [20.2961, 85.8245],
-  "Visakhapatnam": [17.6868, 83.2185],
   "Singapore": [1.3521, 103.8198],
   "Dubai": [25.2048, 55.2708],
   "London": [51.5074, -0.1278],
@@ -38,24 +35,20 @@ const CITY_COORDS: Record<string, [number, number]> = {
 };
 
 const CITY_NORMALIZE: Record<string, string> = {
-  "Bengaluru": "Bangalore", "Bagaluru": "Bangalore", "Dharwad": "Bangalore",
-  "Mysuru": "Bangalore", "Mysore": "Bangalore", "Mangalore": "Bangalore",
-  "Hubli": "Bangalore",
+  "Bengaluru": "Bangalore", "Bagaluru": "Bangalore", "Mysuru": "Bangalore",
+  "Mysore": "Bangalore", "Mangalore": "Bangalore", "Hubli": "Bangalore",
   "Akurdi": "Pune", "Pimpri": "Pune", "Pimpri-Chinchwad": "Pune",
-  "Pimp": "Pune", "Chinchwad": "Pune", "Talegaon": "Pune",
+  "Chinchwad": "Pune", "Talegaon": "Pune",
   "Navi Mumbai": "Mumbai", "Thane": "Mumbai", "Kalyan": "Mumbai",
   "Vasai": "Mumbai", "Panvel": "Mumbai",
   "Savli": "Ahmedabad", "Vadodara": "Ahmedabad", "Surat": "Ahmedabad",
-  "Gandhinagar": "Ahmedabad", "Rajkot": "Ahmedabad",
+  "Gandhinagar": "Ahmedabad",
   "Secunderabad": "Hyderabad", "Warangal": "Hyderabad",
   "Nirsa": "Kolkata", "Dhanbad": "Kolkata", "Durgapur": "Kolkata",
-  "Asansol": "Kolkata",
-  "Madurai": "Chennai", "Thoothukudi": "Chennai", "Tiruchirappalli": "Chennai",
-  "Tuticorin": "Chennai", "Salem": "Chennai", "Vellore": "Chennai",
-  "Ludhiana": "Chandigarh", "Amritsar": "Chandigarh", "Jalandhar": "Chandigarh",
-  "Ghaziabad": "Delhi NCR", "Faridabad": "Delhi NCR", "Meerut": "Delhi NCR",
-  "Greater Noida": "Noida",
-  "Kasa": "Mumbai", "wad": "Pune", "am": "Hyderabad", "ravaram": "Hyderabad",
+  "Madurai": "Chennai", "Tiruchirappalli": "Chennai", "Salem": "Chennai",
+  "Ludhiana": "Chandigarh", "Amritsar": "Chandigarh",
+  "Ghaziabad": "Delhi NCR", "Faridabad": "Delhi NCR", "Noida": "Delhi NCR",
+  "Greater Noida": "Delhi NCR", "Gurgaon": "Gurugram",
 };
 
 function normalizeCity(city: string): string | null {
@@ -68,7 +61,6 @@ export interface CompanyInfo { name: string; domain: string; count: number; }
 
 function groupByCity(jobs: Job[]): Map<string, { coords: [number, number]; jobs: Job[]; companies: CompanyInfo[] }> {
   const raw = new Map<string, { coords: [number, number]; jobs: Job[]; domMap: Map<string, { name: string; count: number }> }>();
-
   for (const job of jobs) {
     const city = normalizeCity(job.city);
     if (!city) continue;
@@ -83,7 +75,6 @@ function groupByCity(jobs: Job[]): Map<string, { coords: [number, number]; jobs:
       else entry.domMap.set(job.logoDomain, { name: job.company, count: 1 });
     }
   }
-
   const result = new Map<string, { coords: [number, number]; jobs: Job[]; companies: CompanyInfo[] }>();
   raw.forEach(({ coords, jobs, domMap }, city) => {
     const companies = [...domMap.entries()]
@@ -104,155 +95,148 @@ function buildMarkerEl(
   onClick: () => void
 ): HTMLElement {
   const top = companies[0];
-  const size = isSelected ? 58 : 46;
-  const imgSize = size - 16;
-  const borderColor = isSelected ? "#fbbf24" : "rgba(34,211,238,0.9)";
-  const outerGlow = isSelected
-    ? "0 0 0 3px rgba(251,191,36,0.2),0 0 20px rgba(251,191,36,0.55),0 6px 28px rgba(0,0,0,0.9)"
-    : "0 0 0 1px rgba(255,255,255,0.04),0 0 14px rgba(34,211,238,0.35),0 6px 24px rgba(0,0,0,0.8)";
-  const badgeBg = isSelected ? "#fbbf24" : "#22d3ee";
-  const badgeText = isSelected ? "#1a1a2e" : "#061018";
-  const labelColor = isSelected ? "#fbbf24" : "#e2e8f0";
-  const labelBorder = isSelected ? "rgba(251,191,36,0.3)" : "rgba(34,211,238,0.18)";
   const countLabel = count > 99 ? "99+" : String(count);
-
+  const displayName = (top?.name ?? city).length > 15
+    ? (top?.name ?? city).slice(0, 14) + "…"
+    : (top?.name ?? city);
   const logoSrc = top?.domain ? `https://logo.clearbit.com/${top.domain}` : "/default-company.svg";
-  const fallback = top?.domain ? `https://www.google.com/s2/favicons?domain=${top.domain}&sz=32` : "/default-company.svg";
+  const fallback = top?.domain ? `https://www.google.com/s2/favicons?domain=${top.domain}&sz=64` : "/default-company.svg";
 
-  // Hover tooltip — top 3 companies summary
-  const compRows = companies.slice(0, 3).map((c) => {
+  const cardBorder = isSelected ? "2px solid #4f46e5" : "1.5px solid rgba(0,0,0,0.1)";
+  const cardShadow = isSelected
+    ? "0 4px 20px rgba(79,70,229,0.4),0 1px 4px rgba(0,0,0,0.12)"
+    : "0 2px 12px rgba(0,0,0,0.22),0 1px 3px rgba(0,0,0,0.1)";
+
+  // Tooltip: other companies in this city
+  const otherRows = companies.slice(1, 4).map((c) => {
     const cLogo = c.domain ? `https://logo.clearbit.com/${c.domain}` : "/default-company.svg";
     const cFb = c.domain ? `https://www.google.com/s2/favicons?domain=${c.domain}&sz=16` : "/default-company.svg";
-    return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">
-      <img src="${cLogo}" width="16" height="16" style="border-radius:3px;object-fit:contain;flex-shrink:0;"
+    return `<div style="display:flex;align-items:center;gap:7px;padding:3px 0;">
+      <img src="${cLogo}" width="16" height="16"
+        style="border-radius:3px;object-fit:contain;background:#f1f5f9;border:1px solid #e2e8f0;flex-shrink:0;"
         onerror="this.onerror=null;this.src='${cFb}'" />
-      <span style="flex:1;font-size:11px;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>
-      <span style="font-size:10px;color:#22d3ee;font-weight:700;flex-shrink:0;">${c.count}</span>
+      <span style="flex:1;font-size:11px;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>
+      <span style="font-size:10px;font-weight:700;color:#6366f1;">${c.count}</span>
     </div>`;
   }).join("");
 
-  // Selected card — full job list with apply links
+  // Job list card (shown on click)
   const jobRows = jobs.slice(0, 8).map((j) => {
     const jLogo = j.logoDomain ? `https://logo.clearbit.com/${j.logoDomain}` : "/default-company.svg";
-    const jFb = j.logoDomain ? `https://www.google.com/s2/favicons?domain=${j.logoDomain}&sz=16` : "/default-company.svg";
-    const title = j.title.length > 42 ? j.title.slice(0, 40) + "…" : j.title;
-    const company = j.company.length > 22 ? j.company.slice(0, 20) + "…" : j.company;
+    const jFb = j.logoDomain ? `https://www.google.com/s2/favicons?domain=${j.logoDomain}&sz=32` : "/default-company.svg";
+    const title = j.title.length > 40 ? j.title.slice(0, 38) + "…" : j.title;
+    const co = j.company.length > 22 ? j.company.slice(0, 20) + "…" : j.company;
     return `<a href="${j.applyUrl}" target="_blank" rel="noopener noreferrer"
-      style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05);text-decoration:none;">
-      <img src="${jLogo}" width="22" height="22" style="border-radius:5px;object-fit:contain;flex-shrink:0;background:rgba(255,255,255,0.08);"
-        onerror="this.onerror=null;this.src='${jFb}'" />
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${company}</div>
-        <div style="font-size:11.5px;color:#f1f5f9;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${title}</div>
+      style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #f1f5f9;text-decoration:none;">
+      <div style="width:32px;height:32px;border-radius:7px;background:#f8fafc;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+        <img src="${jLogo}" width="24" height="24" style="object-fit:contain;"
+          onerror="this.onerror=null;this.src='${jFb}'" />
       </div>
-      <span style="font-size:12px;color:#22d3ee;flex-shrink:0;font-weight:700;">→</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:10px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${co}</div>
+        <div style="font-size:12px;color:#0f172a;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${title}</div>
+      </div>
+      <span style="font-size:10px;font-weight:700;color:white;background:#6366f1;padding:3px 9px;border-radius:20px;flex-shrink:0;white-space:nowrap;">Apply →</span>
     </a>`;
   }).join("");
-
-  const moreLabel = count > 8
-    ? `<div style="font-size:10px;color:#475569;text-align:center;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);">+${count - 8} more · see side panel</div>`
-    : "";
 
   const wrapper = document.createElement("div");
   wrapper.style.cssText = "cursor:pointer;transform:translate(-50%,-50%);position:relative;pointer-events:auto;";
 
   wrapper.innerHTML = `
     <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
-      <!-- Circle -->
-      <div data-circle style="
-        width:${size}px;height:${size}px;border-radius:50%;
-        border:2px solid ${borderColor};
-        background:linear-gradient(135deg,rgba(8,14,30,0.97),rgba(4,8,20,0.97));
-        box-shadow:${outerGlow};
-        display:flex;align-items:center;justify-content:center;overflow:hidden;
-        transition:transform 0.18s ease,box-shadow 0.18s ease;
+      <!-- Pill card marker -->
+      <div data-card style="
+        display:flex;align-items:center;gap:8px;
+        background:white;
+        border:${cardBorder};
+        border-radius:14px;
+        padding:6px 10px 6px 6px;
+        box-shadow:${cardShadow};
+        transition:transform 0.15s ease,box-shadow 0.15s ease;
+        min-width:130px;max-width:200px;
       ">
-        <img src="${logoSrc}" width="${imgSize}" height="${imgSize}"
-          style="object-fit:contain;border-radius:50%;"
-          onerror="this.onerror=null;this.src='${fallback}'" />
+        <div style="
+          width:34px;height:34px;border-radius:8px;
+          background:#f8fafc;border:1px solid #e2e8f0;
+          display:flex;align-items:center;justify-content:center;
+          overflow:hidden;flex-shrink:0;
+        ">
+          <img src="${logoSrc}" width="26" height="26" style="object-fit:contain;"
+            onerror="this.onerror=null;this.src='${fallback}'" />
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11.5px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;">${displayName}</div>
+          <div style="font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${city}</div>
+        </div>
+        <div style="
+          background:${isSelected ? "#4f46e5" : "#6366f1"};
+          color:white;border-radius:10px;
+          font-size:10px;font-weight:700;
+          padding:3px 8px;white-space:nowrap;flex-shrink:0;
+          font-family:Inter,sans-serif;
+        ">${countLabel}</div>
       </div>
-      <!-- Count badge -->
-      <div style="
-        position:absolute;top:-5px;right:-5px;
-        background:${badgeBg};color:${badgeText};
-        border-radius:50%;min-width:18px;height:18px;padding:0 3px;
-        font-size:9px;font-weight:800;
-        display:flex;align-items:center;justify-content:center;
-        border:1.5px solid rgba(4,8,20,0.9);
-        font-family:Inter,sans-serif;line-height:1;
-      ">${countLabel}</div>
-      <!-- City label -->
-      <div style="
-        margin-top:5px;background:rgba(4,8,20,0.92);color:${labelColor};
-        font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;
-        white-space:nowrap;font-family:Inter,sans-serif;
-        border:1px solid ${labelBorder};letter-spacing:0.03em;
-        box-shadow:0 2px 8px rgba(0,0,0,0.7);
-      ">${city} <span style="opacity:0.55;font-weight:500">(${countLabel})</span></div>
       <!-- Hover tooltip -->
       <div data-tooltip style="
-        display:none;position:absolute;
-        bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
-        background:rgba(4,8,20,0.98);
-        border:1px solid rgba(34,211,238,0.22);
-        border-radius:12px;padding:12px 14px;
-        min-width:200px;max-width:240px;
-        box-shadow:0 16px 48px rgba(0,0,0,0.95);
+        display:none;
+        position:absolute;top:calc(100% + 8px);
+        left:50%;transform:translateX(-50%);
+        background:white;border:1px solid #e2e8f0;
+        border-radius:10px;padding:10px 12px;
+        min-width:180px;max-width:220px;
+        box-shadow:0 8px 24px rgba(0,0,0,0.14);
         z-index:9998;pointer-events:none;
       ">
-        <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(34,211,238,0.1);">
-          ${city}<span style="font-size:11px;color:#22d3ee;font-weight:500;"> · ${count} job${count !== 1 ? "s" : ""}</span>
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #f1f5f9;">
+          ${city} &middot; <span style="color:#6366f1;">${count} job${count !== 1 ? "s" : ""}</span>
         </div>
-        ${compRows}
-        <div style="font-size:10px;color:#4b5563;margin-top:8px;text-align:center;border-top:1px solid rgba(255,255,255,0.04);padding-top:6px;">Click to see all openings →</div>
+        ${otherRows || '<div style="font-size:11px;color:#64748b;">Click to explore openings</div>'}
+        <div style="font-size:10px;color:#94a3b8;margin-top:6px;text-align:center;">Click to see all openings →</div>
       </div>
-      <!-- Selected job list card -->
+      <!-- Job list popup (shown on click) -->
       <div data-jobcard style="
         display:${isSelected ? "block" : "none"};
-        position:absolute;
-        top:calc(100% + 12px);
+        position:absolute;top:calc(100% + 10px);
         left:50%;transform:translateX(-50%);
-        background:rgba(4,8,20,0.98);
-        border:1px solid rgba(251,191,36,0.3);
-        border-radius:14px;padding:12px 14px;
-        min-width:270px;max-width:310px;
-        max-height:300px;overflow-y:auto;
+        background:white;border:1px solid #e2e8f0;
+        border-radius:16px;padding:14px 16px;
+        min-width:290px;max-width:330px;
+        max-height:340px;overflow-y:auto;
+        box-shadow:0 20px 50px rgba(0,0,0,0.18),0 4px 12px rgba(0,0,0,0.08);
         z-index:9999;pointer-events:auto;
-        box-shadow:0 24px 64px rgba(0,0,0,0.97),0 0 0 1px rgba(251,191,36,0.08);
       ">
-        <div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:9px;padding-bottom:7px;border-bottom:1px solid rgba(251,191,36,0.15);display:flex;align-items:center;gap:6px;">
-          <span>📍</span> ${city} · ${count} opening${count !== 1 ? "s" : ""}
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+          <span style="font-size:13px;font-weight:700;color:#0f172a;">📍 ${city}</span>
+          <span style="font-size:11px;font-weight:600;color:#6366f1;background:#eef2ff;padding:2px 9px;border-radius:20px;">${count} openings</span>
         </div>
         ${jobRows}
-        ${moreLabel}
+        ${count > 8 ? `<div style="font-size:11px;color:#94a3b8;text-align:center;padding-top:8px;">+${count - 8} more — see side panel</div>` : ""}
       </div>
     </div>
   `;
 
   wrapper.addEventListener("click", onClick);
 
-  // Stop clicks inside the job card from bubbling up to the marker's onClick
   const jobCard = wrapper.querySelector("[data-jobcard]") as HTMLElement | null;
-  if (jobCard) {
-    jobCard.addEventListener("click", (e) => e.stopPropagation());
-  }
+  if (jobCard) jobCard.addEventListener("click", (e) => e.stopPropagation());
 
-  const circleEl = wrapper.querySelector("[data-circle]") as HTMLElement | null;
+  const cardEl = wrapper.querySelector("[data-card]") as HTMLElement | null;
   const tooltipEl = wrapper.querySelector("[data-tooltip]") as HTMLElement | null;
 
   wrapper.addEventListener("mouseenter", () => {
-    if (circleEl) {
-      circleEl.style.transform = "scale(1.2)";
-      circleEl.style.boxShadow = isSelected
-        ? "0 0 0 3px rgba(251,191,36,0.3),0 0 28px rgba(251,191,36,0.6),0 8px 32px rgba(0,0,0,0.9)"
-        : "0 0 0 1px rgba(255,255,255,0.06),0 0 24px rgba(34,211,238,0.55),0 8px 32px rgba(0,0,0,0.9)";
+    if (cardEl) {
+      cardEl.style.transform = "scale(1.06)";
+      cardEl.style.boxShadow = isSelected
+        ? "0 6px 28px rgba(79,70,229,0.45),0 2px 8px rgba(0,0,0,0.12)"
+        : "0 6px 22px rgba(0,0,0,0.28),0 2px 6px rgba(0,0,0,0.1)";
     }
     if (tooltipEl && !isSelected) tooltipEl.style.display = "block";
   });
   wrapper.addEventListener("mouseleave", () => {
-    if (circleEl) {
-      circleEl.style.transform = "scale(1)";
-      circleEl.style.boxShadow = outerGlow;
+    if (cardEl) {
+      cardEl.style.transform = "scale(1)";
+      cardEl.style.boxShadow = cardShadow;
     }
     if (tooltipEl) tooltipEl.style.display = "none";
   });
@@ -286,54 +270,43 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
       const globe = (GlobeGL as any)()(el)
         .width(el.offsetWidth)
         .height(el.offsetHeight)
-        // Clean political-style base — solid color ocean, land painted via polygons
-        .globeImageUrl("//unpkg.com/three-globe/example/img/earth-day.jpg")
+        // earth-blue-marble.jpg is a confirmed valid texture in three-globe
+        .globeImageUrl("//unpkg.com/three-globe/example/img/earth-blue-marble.jpg")
         .bumpImageUrl("//unpkg.com/three-globe/example/img/earth-topology.png")
         .backgroundImageUrl("//unpkg.com/three-globe/example/img/night-sky.png")
         .showAtmosphere(true)
-        .atmosphereColor("#4a9eff")
-        .atmosphereAltitude(0.18)
-        // Country border polygons (loaded async below)
-        .polygonsData([])
-        .polygonCapColor(() => "rgba(10,24,55,0.0)")
-        .polygonSideColor(() => "rgba(0,0,0,0)")
-        .polygonStrokeColor(() => "rgba(34,211,238,0.55)")
-        .polygonAltitude(0.004)
-        // Markers
+        .atmosphereColor("#93c5fd")
+        .atmosphereAltitude(0.14)
         .htmlElementsData([])
         .htmlLat("lat")
         .htmlLng("lng")
-        .htmlAltitude(0.015)
+        .htmlAltitude(0.01)
         .htmlElement((d: any) =>
           buildMarkerEl(d.city, d.count, d.companies, d.jobs, d.isSelected, () => {
             globe.controls().autoRotate = false;
-            globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.8 }, 900);
+            globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.8 }, 800);
             onSelectRef.current(d.city, d.jobs);
           })
         )
-        // Ring pulse on selected city
         .ringsData([])
         .ringLat("lat")
         .ringLng("lng")
-        .ringColor(() => "#22d3ee")
-        .ringMaxRadius(5)
+        .ringColor(() => "#6366f1")
+        .ringMaxRadius(4)
         .ringPropagationSpeed(2)
-        .ringRepeatPeriod(900);
+        .ringRepeatPeriod(1000);
 
-      // Controls: no auto-rotate, zoom-to-cursor, smooth damping
       const controls = globe.controls();
       controls.autoRotate = false;
       controls.enableDamping = true;
-      controls.dampingFactor = 0.08;
+      controls.dampingFactor = 0.1;
       controls.zoomSpeed = 1.5;
       controls.minDistance = 110;
       controls.maxDistance = 700;
-      // zoom toward cursor if supported by the three.js version in use
       if ("zoomToCursor" in controls) (controls as any).zoomToCursor = true;
 
       globe.pointOfView({ lat: 20, lng: 78, altitude: 2.5 });
 
-      // Responsive resize
       const ro = new ResizeObserver(() => {
         if (containerRef.current) {
           globe.width(containerRef.current.offsetWidth);
@@ -346,27 +319,6 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
       (globe as any)._el = el;
       globeRef.current = globe;
       setGlobeReady(true);
-
-      // Fetch country border GeoJSON — gives political map feel
-      // Silently skipped if network fails; globe still works without it
-      fetch("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson")
-        .then((r) => r.json())
-        .then((geo) => {
-          if (mounted && globeRef.current) {
-            globeRef.current.polygonsData(geo.features);
-          }
-        })
-        .catch(() => {
-          // Try a smaller fallback
-          fetch("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson")
-            .then((r) => r.json())
-            .then((geo) => {
-              if (mounted && globeRef.current) {
-                globeRef.current.polygonsData(geo.features);
-              }
-            })
-            .catch(() => {}); // borders are decorative — failure is fine
-        });
     })();
 
     return () => {
@@ -381,11 +333,9 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
 
   useEffect(() => {
     if (!globeReady || !globeRef.current) return;
-
     const cityMap = groupByCity(jobs);
     const markers: any[] = [];
     const rings: any[] = [];
-
     cityMap.forEach(({ coords, jobs: cityJobs, companies }, city) => {
       const isSelected = city === selectedCity;
       markers.push({
@@ -395,12 +345,11 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
       });
       if (isSelected) rings.push({ lat: coords[0], lng: coords[1] });
     });
-
     globeRef.current.htmlElementsData(markers);
     globeRef.current.ringsData(rings);
   }, [jobs, selectedCity, globeReady]);
 
   return (
-    <div ref={containerRef} className="w-full h-full" style={{ background: "#060914" }} />
+    <div ref={containerRef} className="w-full h-full" style={{ background: "#0f172a" }} />
   );
 }
