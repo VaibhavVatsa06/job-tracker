@@ -247,9 +247,12 @@ The build command is `prisma generate && next build` (already set in `package.js
 | Variable | Service | Free tier | Used for |
 |---|---|---|---|
 | `DATABASE_URL` | [Neon](https://neon.tech) | 0.5 GB storage | Storing all jobs, alerts, applications |
-| `RAPIDAPI_KEY` | [RapidAPI / JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) | 200 req/month | Fetching live job listings |
+| `RAPIDAPI_KEY` | [RapidAPI / JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) | 200 req/month | Job listings from Indeed, LinkedIn, Google Jobs |
+| `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` | [Adzuna](https://developer.adzuna.com) | 250 req/day | Job listings from India, UK, Singapore, UAE |
 | `RESEND_API_KEY` | [Resend](https://resend.com) | 3,000 emails/month | Sending job alert digest emails |
 | `CRON_SECRET` | — (make your own) | — | Protecting cron endpoints from public access |
+
+> Remotive (remote tech jobs) is fetched automatically with no API key needed.
 
 See the **API keys & services** section above for step-by-step setup for each one.
 

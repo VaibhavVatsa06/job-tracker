@@ -32,6 +32,9 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "Amsterdam": [52.3676, 4.9041],
   "Sydney": [-33.8688, 151.2093],
   "Tokyo": [35.6762, 139.6503],
+  "Paris": [48.8566, 2.3522],
+  "Austin": [30.2672, -97.7431],
+  "Seattle": [47.6062, -122.3321],
 };
 
 function getCoords(job: Job): [number, number] | null {
@@ -51,13 +54,109 @@ function groupByCity(jobs: Job[]): Map<string, { coords: [number, number]; jobs:
   return map;
 }
 
-function cityColor(jobs: Job[]): string {
-  const types = jobs.map((j) => j.companyType);
-  const startups = types.filter((t) => t === "Startup").length;
-  const mncs = types.filter((t) => t === "MNC" || t === "IndianIT").length;
-  if (startups > mncs) return "#f97316";
-  if (mncs > startups) return "#818cf8";
-  return "#a78bfa";
+// Pick the most common company logo domain in a city cluster
+function getTopDomain(jobs: Job[]): string {
+  const counts = new Map<string, number>();
+  for (const job of jobs) {
+    if (job.logoDomain) counts.set(job.logoDomain, (counts.get(job.logoDomain) || 0) + 1);
+  }
+  if (!counts.size) return "";
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function buildMarkerEl(
+  city: string,
+  count: number,
+  topDomain: string,
+  isSelected: boolean,
+  onClick: () => void
+): HTMLElement {
+  const size = isSelected ? 46 : 38;
+  const imgSize = size - 10;
+  const borderColor = isSelected ? "#fbbf24" : "rgba(255,255,255,0.92)";
+  const badgeBg = isSelected ? "#fbbf24" : "#6366f1";
+  const badgeColor = isSelected ? "#1e1b4b" : "white";
+  const glowShadow = isSelected
+    ? "0 0 0 3px rgba(251,191,36,0.35), 0 6px 24px rgba(0,0,0,0.7)"
+    : "0 4px 16px rgba(0,0,0,0.6)";
+  const labelColor = isSelected ? "#fbbf24" : "rgba(255,255,255,0.9)";
+  const labelBorder = isSelected ? "rgba(251,191,36,0.4)" : "rgba(129,140,248,0.35)";
+  const countLabel = count > 99 ? "99+" : String(count);
+
+  const logoSrc = topDomain
+    ? `https://logo.clearbit.com/${topDomain}`
+    : `https://www.google.com/s2/favicons?domain=${topDomain}&sz=32`;
+  const fallbackSrc = topDomain
+    ? `https://www.google.com/s2/favicons?domain=${topDomain}&sz=32`
+    : "/default-company.svg";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "cursor:pointer;transform:translate(-50%,-50%);position:relative;";
+  wrapper.innerHTML = `
+    <div style="
+      position:relative;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+    ">
+      <div style="
+        width:${size}px;height:${size}px;
+        border-radius:50%;
+        border:2.5px solid ${borderColor};
+        background:rgba(255,255,255,0.97);
+        box-shadow:${glowShadow};
+        display:flex;align-items:center;justify-content:center;
+        overflow:hidden;
+        transition:transform 0.15s;
+      ">
+        <img
+          src="${logoSrc}"
+          width="${imgSize}" height="${imgSize}"
+          style="object-fit:contain;border-radius:50%;"
+          onerror="this.onerror=null;this.src='${fallbackSrc}'"
+        />
+      </div>
+      <div style="
+        position:absolute;
+        top:-5px;right:-5px;
+        background:${badgeBg};
+        color:${badgeColor};
+        border-radius:50%;
+        min-width:18px;height:18px;
+        padding:0 3px;
+        font-size:9px;font-weight:800;
+        display:flex;align-items:center;justify-content:center;
+        border:1.5px solid white;
+        font-family:Inter,sans-serif;
+        line-height:1;
+      ">${countLabel}</div>
+      <div style="
+        margin-top:4px;
+        background:rgba(8,12,30,0.88);
+        color:${labelColor};
+        font-size:9px;font-weight:700;
+        padding:2px 7px;border-radius:5px;
+        white-space:nowrap;
+        font-family:Inter,sans-serif;
+        border:1px solid ${labelBorder};
+        letter-spacing:0.01em;
+      ">${city}</div>
+    </div>
+  `;
+
+  wrapper.addEventListener("click", onClick);
+
+  // Hover scale
+  wrapper.addEventListener("mouseenter", () => {
+    (wrapper.firstElementChild?.firstElementChild as HTMLElement | null)?.style &&
+      ((wrapper.firstElementChild!.firstElementChild as HTMLElement).style.transform = "scale(1.15)");
+  });
+  wrapper.addEventListener("mouseleave", () => {
+    (wrapper.firstElementChild?.firstElementChild as HTMLElement | null)?.style &&
+      ((wrapper.firstElementChild!.firstElementChild as HTMLElement).style.transform = "scale(1)");
+  });
+
+  return wrapper;
 }
 
 interface Props {
@@ -92,19 +191,19 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
         .showAtmosphere(true)
         .atmosphereColor("#818cf8")
         .atmosphereAltitude(0.22)
-        .pointsData([])
-        .pointLat("lat")
-        .pointLng("lng")
-        .pointColor("color")
-        .pointRadius("radius")
-        .pointAltitude("altitude")
-        .pointResolution(16)
-        .pointLabel("label")
-        .onPointClick((point: any) => {
-          globe.controls().autoRotate = false;
-          globe.pointOfView({ lat: point.lat, lng: point.lng, altitude: 1.8 }, 900);
-          onSelectRef.current(point.city, point.jobs);
-        })
+        // HTML marker layer (company logos)
+        .htmlElementsData([])
+        .htmlLat("lat")
+        .htmlLng("lng")
+        .htmlAltitude(0.01)
+        .htmlElement((d: any) =>
+          buildMarkerEl(d.city, d.count, d.topDomain, d.isSelected, () => {
+            globe.controls().autoRotate = false;
+            globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.8 }, 900);
+            onSelectRef.current(d.city, d.jobs);
+          })
+        )
+        // Ring animation for selected city
         .ringsData([])
         .ringLat("lat")
         .ringLng("lng")
@@ -114,12 +213,12 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
         .ringRepeatPeriod(900);
 
       const controls = globe.controls();
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.5;
+      // No auto-rotation — user controls the globe manually
+      controls.autoRotate = false;
       controls.enableDamping = true;
       controls.dampingFactor = 0.08;
 
-      // Start camera looking at India
+      // Start looking at India
       globe.pointOfView({ lat: 20, lng: 78, altitude: 2.5 });
 
       // Responsive resize
@@ -146,56 +245,29 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
     };
   }, []);
 
-  // Update points and rings whenever jobs or selectedCity changes
+  // Update markers and rings when jobs or selected city changes
   useEffect(() => {
     if (!globeRef.current) return;
 
     const cityMap = groupByCity(jobs);
-    const points: any[] = [];
+    const markers: any[] = [];
     const rings: any[] = [];
 
     cityMap.forEach(({ coords, jobs: cityJobs }, city) => {
       const isSelected = city === selectedCity;
-      const count = cityJobs.length;
-      const baseRadius = Math.min(Math.sqrt(count) * 0.38 + 0.22, 1.4);
-
-      points.push({
+      markers.push({
         city,
         lat: coords[0],
         lng: coords[1],
-        count,
+        count: cityJobs.length,
         jobs: cityJobs,
-        color: isSelected ? "#fbbf24" : cityColor(cityJobs),
-        radius: isSelected ? baseRadius * 1.7 : baseRadius,
-        altitude: isSelected ? 0.08 : 0.02,
-        label: `
-          <div style="
-            background:rgba(8,12,30,0.93);
-            color:white;
-            padding:8px 14px;
-            border-radius:10px;
-            font-size:13px;
-            font-weight:600;
-            border:1px solid rgba(129,140,248,0.5);
-            box-shadow:0 6px 24px rgba(0,0,0,0.7);
-            white-space:nowrap;
-            font-family:Inter,sans-serif;
-            pointer-events:none;
-          ">
-            📍 ${city}
-            <div style="color:#a5b4fc;font-weight:400;font-size:11px;margin-top:3px">
-              ${count} opening${count !== 1 ? "s" : ""}
-            </div>
-          </div>
-        `,
+        topDomain: getTopDomain(cityJobs),
+        isSelected,
       });
-
-      if (isSelected) {
-        rings.push({ lat: coords[0], lng: coords[1] });
-      }
+      if (isSelected) rings.push({ lat: coords[0], lng: coords[1] });
     });
 
-    globeRef.current.pointsData(points);
+    globeRef.current.htmlElementsData(markers);
     globeRef.current.ringsData(rings);
   }, [jobs, selectedCity]);
 

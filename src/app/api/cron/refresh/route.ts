@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchFromJSearch, deactivateOldJobs } from "@/lib/jobService";
+import { fetchAllSources, deactivateOldJobs } from "@/lib/jobService";
 
-// Called by Vercel Cron (vercel.json) or any external scheduler
+// Called by Vercel Cron (vercel.json) every 2 days
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.replace("Bearer ", "");
@@ -10,10 +10,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [added, expired] = await Promise.all([
-    fetchFromJSearch("software developer jobs in India"),
+  const [result, expired] = await Promise.all([
+    fetchAllSources(),
     deactivateOldJobs(),
   ]);
 
-  return NextResponse.json({ ok: true, added, expired, at: new Date().toISOString() });
+  return NextResponse.json({
+    ok: true,
+    added: result.total,
+    breakdown: result.breakdown,
+    expired,
+    at: new Date().toISOString(),
+  });
 }

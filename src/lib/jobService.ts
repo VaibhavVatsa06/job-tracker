@@ -106,6 +106,219 @@ export async function fetchFromJSearch(query?: string): Promise<number> {
   return totalCreated;
 }
 
+// ── Adzuna API (free, covers India + global) ───────────────────────────────
+
+const ADZUNA_QUERIES = [
+  { what: "software engineer", where: "India", country: "in" },
+  { what: "data scientist", where: "India", country: "in" },
+  { what: "devops cloud engineer", where: "India", country: "in" },
+  { what: "fullstack developer", where: "India", country: "in" },
+  { what: "software developer", where: "Singapore", country: "sg" },
+  { what: "software engineer", where: "London", country: "gb" },
+  { what: "software engineer", where: "Dubai", country: "ae" },
+];
+
+export async function fetchFromAdzuna(): Promise<number> {
+  const appId = process.env.ADZUNA_APP_ID;
+  const appKey = process.env.ADZUNA_APP_KEY;
+  if (!appId || !appKey) return 0;
+
+  let total = 0;
+
+  for (const { what, where, country } of ADZUNA_QUERIES) {
+    try {
+      const res = await axios.get(
+        `https://api.adzuna.com/v1/api/jobs/${country}/search/1`,
+        {
+          params: {
+            app_id: appId,
+            app_key: appKey,
+            results_per_page: 20,
+            what,
+            where,
+            "content-type": "application/json",
+          },
+          timeout: 12000,
+        }
+      );
+
+      const jobs = res.data?.results ?? [];
+      for (const j of jobs) {
+        const id = `adzuna_${j.id}`;
+        const rawCity =
+          j.location?.area?.[3] ||
+          j.location?.area?.[2] ||
+          j.location?.display_name?.split(",")[0]?.trim() ||
+          where;
+        const city = normalizeCity(rawCity, false);
+        const companyName: string = j.company?.display_name ?? "Unknown";
+        const guessedDomain = companyName.toLowerCase().replace(/[^a-z0-9]/g, "") + ".com";
+
+        const jobData = {
+          title: j.title ?? "Software Engineer",
+          company: companyName,
+          logoDomain: guessedDomain,
+          companyType: inferCompanyType(companyName, undefined),
+          location: j.location?.display_name ?? where,
+          city,
+          country: { in: "India", sg: "Singapore", gb: "UK", ae: "UAE" }[country] ?? country.toUpperCase(),
+          lat: j.latitude ?? null,
+          lng: j.longitude ?? null,
+          minExp: 1,
+          maxExp: 5,
+          salaryMin: j.salary_min ? Math.round(j.salary_min) : null,
+          salaryMax: j.salary_max ? Math.round(j.salary_max) : null,
+          currency: { in: "INR", sg: "SGD", gb: "GBP", ae: "AED" }[country] ?? "USD",
+          jobType: "Full-time" as const,
+          industry: inferIndustry(j.title),
+          skills: JSON.stringify(extractSkillsFromTitle(j.title ?? "")),
+          description: j.description ?? "",
+          applyUrl: j.redirect_url ?? "#",
+          source: "adzuna",
+          isActive: true,
+          postedAt: j.created ? new Date(j.created) : new Date(),
+        };
+
+        try {
+          await prisma.job.upsert({
+            where: { id },
+            update: { isActive: true, updatedAt: new Date() },
+            create: { id, ...jobData },
+          });
+          total++;
+        } catch { /* skip duplicates */ }
+      }
+    } catch (err) {
+      console.error(`[Adzuna] Error for "${what}" in ${where}:`, (err as Error).message);
+    }
+    await sleep(400);
+  }
+
+  return total;
+}
+
+// ── Remotive API (free, no key needed — remote tech jobs) ──────────────────
+
+const REMOTIVE_CATEGORIES = [
+  "software-dev",
+  "devops-sysadmin",
+  "data",
+  "product",
+  "design",
+];
+
+export async function fetchFromRemotive(): Promise<number> {
+  let total = 0;
+
+  for (const category of REMOTIVE_CATEGORIES) {
+    try {
+      const res = await axios.get("https://remotive.com/api/remote-jobs", {
+        params: { category, limit: 30 },
+        timeout: 12000,
+      });
+
+      const jobs = res.data?.jobs ?? [];
+      for (const j of jobs) {
+        const id = `remotive_${j.id}`;
+        const logoUrl: string = j.company_logo_url ?? j.company_logo ?? "";
+        let logoDomain: string | null = null;
+        try { logoDomain = new URL(logoUrl).hostname.replace("www.", ""); } catch {}
+
+        const jobData = {
+          title: j.title ?? "Software Engineer",
+          company: j.company_name ?? "Unknown",
+          logoDomain,
+          companyType: inferCompanyType(j.company_name ?? "", undefined),
+          location: "Remote Worldwide",
+          city: "Remote",
+          country: "Worldwide",
+          lat: null,
+          lng: null,
+          minExp: 1,
+          maxExp: 5,
+          salaryMin: parseSalaryBound(j.salary, "min"),
+          salaryMax: parseSalaryBound(j.salary, "max"),
+          currency: "USD",
+          jobType: "Remote" as const,
+          industry: inferIndustry(j.title),
+          skills: JSON.stringify((j.tags ?? []).slice(0, 8)),
+          description: (j.description ?? "").replace(/<[^>]+>/g, "").slice(0, 2000),
+          applyUrl: j.url ?? "#",
+          source: "remotive",
+          isActive: true,
+          postedAt: j.publication_date ? new Date(j.publication_date) : new Date(),
+        };
+
+        try {
+          await prisma.job.upsert({
+            where: { id },
+            update: { isActive: true, updatedAt: new Date() },
+            create: { id, ...jobData },
+          });
+          total++;
+        } catch { /* skip duplicates */ }
+      }
+    } catch (err) {
+      console.error(`[Remotive] Error for "${category}":`, (err as Error).message);
+    }
+    await sleep(300);
+  }
+
+  return total;
+}
+
+// Run all sources in parallel and return total new jobs
+export async function fetchAllSources(): Promise<{ total: number; breakdown: Record<string, number> }> {
+  const [jsearch, adzuna, remotive] = await Promise.allSettled([
+    fetchFromJSearch(),
+    fetchFromAdzuna(),
+    fetchFromRemotive(),
+  ]);
+
+  const counts = {
+    jsearch: jsearch.status === "fulfilled" ? jsearch.value : 0,
+    adzuna: adzuna.status === "fulfilled" ? adzuna.value : 0,
+    remotive: remotive.status === "fulfilled" ? remotive.value : 0,
+  };
+
+  return { total: counts.jsearch + counts.adzuna + counts.remotive, breakdown: counts };
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function parseSalaryBound(salary: string | undefined, bound: "min" | "max"): number | null {
+  if (!salary) return null;
+  const matches = [...salary.matchAll(/[\d,]+/g)].map((m) => parseInt(m[0].replace(/,/g, "")));
+  if (!matches.length) return null;
+  return bound === "min" ? matches[0] : matches[matches.length - 1];
+}
+
+function extractSkillsFromTitle(title: string): string[] {
+  const t = title.toLowerCase();
+  const map: Record<string, string[]> = {
+    react: ["React", "JavaScript", "TypeScript"],
+    angular: ["Angular", "TypeScript"],
+    vue: ["Vue.js", "JavaScript"],
+    node: ["Node.js", "JavaScript"],
+    python: ["Python"],
+    java: ["Java", "Spring Boot"],
+    golang: ["Go"],
+    devops: ["Docker", "Kubernetes", "CI/CD"],
+    aws: ["AWS", "Cloud"],
+    gcp: ["GCP", "Cloud"],
+    azure: ["Azure", "Cloud"],
+    "machine learning": ["Python", "ML", "TensorFlow"],
+    "data science": ["Python", "SQL", "ML"],
+    "product manager": ["Product Roadmap", "Agile"],
+    design: ["Figma", "UI/UX"],
+    security: ["Security", "SIEM", "Penetration Testing"],
+  };
+  for (const [key, skills] of Object.entries(map)) {
+    if (t.includes(key)) return skills;
+  }
+  return [];
+}
+
 export async function deactivateOldJobs(): Promise<number> {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const result = await prisma.job.updateMany({
