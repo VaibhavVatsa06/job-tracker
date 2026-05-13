@@ -99,16 +99,17 @@ function buildMarkerEl(
   city: string,
   count: number,
   companies: CompanyInfo[],
+  jobs: Job[],
   isSelected: boolean,
   onClick: () => void
 ): HTMLElement {
   const top = companies[0];
-  const size = isSelected ? 60 : 48;
+  const size = isSelected ? 58 : 46;
   const imgSize = size - 16;
   const borderColor = isSelected ? "#fbbf24" : "rgba(34,211,238,0.9)";
   const outerGlow = isSelected
-    ? "0 0 0 3px rgba(251,191,36,0.2), 0 0 18px rgba(251,191,36,0.5), 0 6px 28px rgba(0,0,0,0.85)"
-    : "0 0 0 1px rgba(255,255,255,0.04), 0 0 14px rgba(34,211,238,0.35), 0 6px 24px rgba(0,0,0,0.8)";
+    ? "0 0 0 3px rgba(251,191,36,0.2),0 0 20px rgba(251,191,36,0.55),0 6px 28px rgba(0,0,0,0.9)"
+    : "0 0 0 1px rgba(255,255,255,0.04),0 0 14px rgba(34,211,238,0.35),0 6px 24px rgba(0,0,0,0.8)";
   const badgeBg = isSelected ? "#fbbf24" : "#22d3ee";
   const badgeText = isSelected ? "#1a1a2e" : "#061018";
   const labelColor = isSelected ? "#fbbf24" : "#e2e8f0";
@@ -118,23 +119,46 @@ function buildMarkerEl(
   const logoSrc = top?.domain ? `https://logo.clearbit.com/${top.domain}` : "/default-company.svg";
   const fallback = top?.domain ? `https://www.google.com/s2/favicons?domain=${top.domain}&sz=32` : "/default-company.svg";
 
+  // Hover tooltip — top 3 companies summary
   const compRows = companies.slice(0, 3).map((c) => {
     const cLogo = c.domain ? `https://logo.clearbit.com/${c.domain}` : "/default-company.svg";
     const cFb = c.domain ? `https://www.google.com/s2/favicons?domain=${c.domain}&sz=16` : "/default-company.svg";
     return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">
-      <img src="${cLogo}" width="16" height="16"
-        style="border-radius:3px;object-fit:contain;flex-shrink:0;"
+      <img src="${cLogo}" width="16" height="16" style="border-radius:3px;object-fit:contain;flex-shrink:0;"
         onerror="this.onerror=null;this.src='${cFb}'" />
       <span style="flex:1;font-size:11px;color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>
       <span style="font-size:10px;color:#22d3ee;font-weight:700;flex-shrink:0;">${c.count}</span>
     </div>`;
   }).join("");
 
+  // Selected card — full job list with apply links
+  const jobRows = jobs.slice(0, 8).map((j) => {
+    const jLogo = j.logoDomain ? `https://logo.clearbit.com/${j.logoDomain}` : "/default-company.svg";
+    const jFb = j.logoDomain ? `https://www.google.com/s2/favicons?domain=${j.logoDomain}&sz=16` : "/default-company.svg";
+    const title = j.title.length > 42 ? j.title.slice(0, 40) + "…" : j.title;
+    const company = j.company.length > 22 ? j.company.slice(0, 20) + "…" : j.company;
+    return `<a href="${j.applyUrl}" target="_blank" rel="noopener noreferrer"
+      style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05);text-decoration:none;">
+      <img src="${jLogo}" width="22" height="22" style="border-radius:5px;object-fit:contain;flex-shrink:0;background:rgba(255,255,255,0.08);"
+        onerror="this.onerror=null;this.src='${jFb}'" />
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${company}</div>
+        <div style="font-size:11.5px;color:#f1f5f9;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${title}</div>
+      </div>
+      <span style="font-size:12px;color:#22d3ee;flex-shrink:0;font-weight:700;">→</span>
+    </a>`;
+  }).join("");
+
+  const moreLabel = count > 8
+    ? `<div style="font-size:10px;color:#475569;text-align:center;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);">+${count - 8} more · see side panel</div>`
+    : "";
+
   const wrapper = document.createElement("div");
   wrapper.style.cssText = "cursor:pointer;transform:translate(-50%,-50%);position:relative;pointer-events:auto;";
 
   wrapper.innerHTML = `
     <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+      <!-- Circle -->
       <div data-circle style="
         width:${size}px;height:${size}px;border-radius:50%;
         border:2px solid ${borderColor};
@@ -147,6 +171,7 @@ function buildMarkerEl(
           style="object-fit:contain;border-radius:50%;"
           onerror="this.onerror=null;this.src='${fallback}'" />
       </div>
+      <!-- Count badge -->
       <div style="
         position:absolute;top:-5px;right:-5px;
         background:${badgeBg};color:${badgeText};
@@ -156,14 +181,15 @@ function buildMarkerEl(
         border:1.5px solid rgba(4,8,20,0.9);
         font-family:Inter,sans-serif;line-height:1;
       ">${countLabel}</div>
+      <!-- City label -->
       <div style="
-        margin-top:5px;
-        background:rgba(4,8,20,0.92);color:${labelColor};
+        margin-top:5px;background:rgba(4,8,20,0.92);color:${labelColor};
         font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px;
         white-space:nowrap;font-family:Inter,sans-serif;
         border:1px solid ${labelBorder};letter-spacing:0.03em;
         box-shadow:0 2px 8px rgba(0,0,0,0.7);
       ">${city} <span style="opacity:0.55;font-weight:500">(${countLabel})</span></div>
+      <!-- Hover tooltip -->
       <div data-tooltip style="
         display:none;position:absolute;
         bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
@@ -171,20 +197,45 @@ function buildMarkerEl(
         border:1px solid rgba(34,211,238,0.22);
         border-radius:12px;padding:12px 14px;
         min-width:200px;max-width:240px;
-        box-shadow:0 16px 48px rgba(0,0,0,0.95),0 0 0 1px rgba(34,211,238,0.06);
-        z-index:9999;pointer-events:none;
+        box-shadow:0 16px 48px rgba(0,0,0,0.95);
+        z-index:9998;pointer-events:none;
       ">
         <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid rgba(34,211,238,0.1);">
-          ${city}<span style="font-size:11px;color:#22d3ee;font-weight:500;"> &middot; ${count} job${count !== 1 ? "s" : ""}</span>
+          ${city}<span style="font-size:11px;color:#22d3ee;font-weight:500;"> · ${count} job${count !== 1 ? "s" : ""}</span>
         </div>
         ${compRows}
-        ${companies.length > 3 ? `<div style="font-size:10px;color:#475569;margin-top:4px;">+${companies.length - 3} more companies</div>` : ""}
-        <div style="font-size:10px;color:#4b5563;margin-top:8px;text-align:center;border-top:1px solid rgba(255,255,255,0.04);padding-top:6px;">Click to explore →</div>
+        <div style="font-size:10px;color:#4b5563;margin-top:8px;text-align:center;border-top:1px solid rgba(255,255,255,0.04);padding-top:6px;">Click to see all openings →</div>
+      </div>
+      <!-- Selected job list card -->
+      <div data-jobcard style="
+        display:${isSelected ? "block" : "none"};
+        position:absolute;
+        top:calc(100% + 12px);
+        left:50%;transform:translateX(-50%);
+        background:rgba(4,8,20,0.98);
+        border:1px solid rgba(251,191,36,0.3);
+        border-radius:14px;padding:12px 14px;
+        min-width:270px;max-width:310px;
+        max-height:300px;overflow-y:auto;
+        z-index:9999;pointer-events:auto;
+        box-shadow:0 24px 64px rgba(0,0,0,0.97),0 0 0 1px rgba(251,191,36,0.08);
+      ">
+        <div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:9px;padding-bottom:7px;border-bottom:1px solid rgba(251,191,36,0.15);display:flex;align-items:center;gap:6px;">
+          <span>📍</span> ${city} · ${count} opening${count !== 1 ? "s" : ""}
+        </div>
+        ${jobRows}
+        ${moreLabel}
       </div>
     </div>
   `;
 
   wrapper.addEventListener("click", onClick);
+
+  // Stop clicks inside the job card from bubbling up to the marker's onClick
+  const jobCard = wrapper.querySelector("[data-jobcard]") as HTMLElement | null;
+  if (jobCard) {
+    jobCard.addEventListener("click", (e) => e.stopPropagation());
+  }
 
   const circleEl = wrapper.querySelector("[data-circle]") as HTMLElement | null;
   const tooltipEl = wrapper.querySelector("[data-tooltip]") as HTMLElement | null;
@@ -193,10 +244,10 @@ function buildMarkerEl(
     if (circleEl) {
       circleEl.style.transform = "scale(1.2)";
       circleEl.style.boxShadow = isSelected
-        ? "0 0 0 3px rgba(251,191,36,0.3), 0 0 28px rgba(251,191,36,0.6), 0 8px 32px rgba(0,0,0,0.9)"
-        : "0 0 0 1px rgba(255,255,255,0.06), 0 0 24px rgba(34,211,238,0.55), 0 8px 32px rgba(0,0,0,0.9)";
+        ? "0 0 0 3px rgba(251,191,36,0.3),0 0 28px rgba(251,191,36,0.6),0 8px 32px rgba(0,0,0,0.9)"
+        : "0 0 0 1px rgba(255,255,255,0.06),0 0 24px rgba(34,211,238,0.55),0 8px 32px rgba(0,0,0,0.9)";
     }
-    if (tooltipEl) tooltipEl.style.display = "block";
+    if (tooltipEl && !isSelected) tooltipEl.style.display = "block";
   });
   wrapper.addEventListener("mouseleave", () => {
     if (circleEl) {
@@ -235,23 +286,32 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
       const globe = (GlobeGL as any)()(el)
         .width(el.offsetWidth)
         .height(el.offsetHeight)
-        .globeImageUrl("//unpkg.com/three-globe/example/img/earth-night.jpg")
+        // Clean political-style base — solid color ocean, land painted via polygons
+        .globeImageUrl("//unpkg.com/three-globe/example/img/earth-day.jpg")
         .bumpImageUrl("//unpkg.com/three-globe/example/img/earth-topology.png")
         .backgroundImageUrl("//unpkg.com/three-globe/example/img/night-sky.png")
         .showAtmosphere(true)
-        .atmosphereColor("#22d3ee")
-        .atmosphereAltitude(0.22)
+        .atmosphereColor("#4a9eff")
+        .atmosphereAltitude(0.18)
+        // Country border polygons (loaded async below)
+        .polygonsData([])
+        .polygonCapColor(() => "rgba(10,24,55,0.0)")
+        .polygonSideColor(() => "rgba(0,0,0,0)")
+        .polygonStrokeColor(() => "rgba(34,211,238,0.55)")
+        .polygonAltitude(0.004)
+        // Markers
         .htmlElementsData([])
         .htmlLat("lat")
         .htmlLng("lng")
         .htmlAltitude(0.015)
         .htmlElement((d: any) =>
-          buildMarkerEl(d.city, d.count, d.companies, d.isSelected, () => {
+          buildMarkerEl(d.city, d.count, d.companies, d.jobs, d.isSelected, () => {
             globe.controls().autoRotate = false;
             globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.8 }, 900);
             onSelectRef.current(d.city, d.jobs);
           })
         )
+        // Ring pulse on selected city
         .ringsData([])
         .ringLat("lat")
         .ringLng("lng")
@@ -260,13 +320,20 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
         .ringPropagationSpeed(2)
         .ringRepeatPeriod(900);
 
+      // Controls: no auto-rotate, zoom-to-cursor, smooth damping
       const controls = globe.controls();
       controls.autoRotate = false;
       controls.enableDamping = true;
       controls.dampingFactor = 0.08;
+      controls.zoomSpeed = 1.5;
+      controls.minDistance = 110;
+      controls.maxDistance = 700;
+      // zoom toward cursor if supported by the three.js version in use
+      if ("zoomToCursor" in controls) (controls as any).zoomToCursor = true;
 
       globe.pointOfView({ lat: 20, lng: 78, altitude: 2.5 });
 
+      // Responsive resize
       const ro = new ResizeObserver(() => {
         if (containerRef.current) {
           globe.width(containerRef.current.offsetWidth);
@@ -279,6 +346,27 @@ export function MapView({ jobs, selectedCity, onSelectCity }: Props) {
       (globe as any)._el = el;
       globeRef.current = globe;
       setGlobeReady(true);
+
+      // Fetch country border GeoJSON — gives political map feel
+      // Silently skipped if network fails; globe still works without it
+      fetch("https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson")
+        .then((r) => r.json())
+        .then((geo) => {
+          if (mounted && globeRef.current) {
+            globeRef.current.polygonsData(geo.features);
+          }
+        })
+        .catch(() => {
+          // Try a smaller fallback
+          fetch("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson")
+            .then((r) => r.json())
+            .then((geo) => {
+              if (mounted && globeRef.current) {
+                globeRef.current.polygonsData(geo.features);
+              }
+            })
+            .catch(() => {}); // borders are decorative — failure is fine
+        });
     })();
 
     return () => {
