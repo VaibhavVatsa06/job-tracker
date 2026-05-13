@@ -93,6 +93,8 @@ export default function AdminPage() {
             { name: "Adzuna", key: "ADZUNA_APP_ID + ADZUNA_APP_KEY", limit: "250 req/day", color: "orange" },
             { name: "Remotive", key: "No key needed", limit: "Unlimited (remote jobs)", color: "purple" },
             { name: "Greenhouse", key: "No key needed", limit: "Public boards API", color: "green" },
+            { name: "Lever", key: "No key needed", limit: "Public postings API", color: "pink" },
+            { name: "Workday", key: "No key needed", limit: "Public REST API", color: "yellow" },
           ].map(({ name, key, limit, color }) => (
             <div key={name} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
               <div>
@@ -111,7 +113,7 @@ export default function AdminPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="font-semibold text-slate-900 mb-2">Manual Refresh</h2>
         <p className="text-sm text-slate-600 mb-4">
-          Fetches jobs from all 4 sources in parallel: JSearch, Adzuna, Remotive, and Greenhouse. Greenhouse works even without API keys.
+          Fetches jobs from all 6 sources in parallel: JSearch, Adzuna, Remotive, Greenhouse, Lever, and Workday. Last 4 require no API keys.
         </p>
         <button
           onClick={triggerRefresh}

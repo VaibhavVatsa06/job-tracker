@@ -9,10 +9,12 @@ export async function POST() {
 
   const b = result.breakdown;
   const parts = [
-    b.jsearch  ? `JSearch: ${b.jsearch}`     : null,
-    b.adzuna   ? `Adzuna: ${b.adzuna}`       : null,
-    b.remotive ? `Remotive: ${b.remotive}`   : null,
+    b.jsearch    ? `JSearch: ${b.jsearch}`       : null,
+    b.adzuna     ? `Adzuna: ${b.adzuna}`         : null,
+    b.remotive   ? `Remotive: ${b.remotive}`     : null,
     b.greenhouse !== undefined ? `Greenhouse: ${b.greenhouse}` : null,
+    b.lever      ? `Lever: ${b.lever}`           : null,
+    b.workday    ? `Workday: ${b.workday}`       : null,
   ].filter(Boolean).join(", ");
 
   return NextResponse.json({
