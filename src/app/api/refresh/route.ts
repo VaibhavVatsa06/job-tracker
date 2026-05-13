@@ -13,8 +13,7 @@ export async function POST() {
     b.adzuna     ? `Adzuna: ${b.adzuna}`         : null,
     b.remotive   ? `Remotive: ${b.remotive}`     : null,
     b.greenhouse !== undefined ? `Greenhouse: ${b.greenhouse}` : null,
-    b.lever      ? `Lever: ${b.lever}`           : null,
-    b.workday    ? `Workday: ${b.workday}`       : null,
+    b.remoteok   ? `RemoteOK: ${b.remoteok}`     : null,
   ].filter(Boolean).join(", ");
 
   return NextResponse.json({

@@ -253,255 +253,67 @@ export async function fetchFromRemotive(): Promise<number> {
   return total;
 }
 
-// ── Lever (free public API — no key needed) ───────────────────────────────
+// ── RemoteOK (free public API — no key needed) ────────────────────────────
 
-const LEVER_COMPANIES: { slug: string; name: string; domain: string }[] = [
-  { slug: "netflix", name: "Netflix", domain: "netflix.com" },
-  { slug: "reddit", name: "Reddit", domain: "reddit.com" },
-  { slug: "plaid", name: "Plaid", domain: "plaid.com" },
-  { slug: "brex", name: "Brex", domain: "brex.com" },
-  { slug: "airtable", name: "Airtable", domain: "airtable.com" },
-  { slug: "rippling", name: "Rippling", domain: "rippling.com" },
-  { slug: "lattice", name: "Lattice", domain: "lattice.com" },
-  { slug: "intercom", name: "Intercom", domain: "intercom.com" },
-  { slug: "mixpanel", name: "Mixpanel", domain: "mixpanel.com" },
-  { slug: "asana", name: "Asana", domain: "asana.com" },
-  { slug: "squarespace", name: "Squarespace", domain: "squarespace.com" },
-  { slug: "deliveroo", name: "Deliveroo", domain: "deliveroo.com" },
-];
+const REMOTEOK_TECH_TAGS = new Set([
+  "software", "dev", "engineer", "developer", "backend", "frontend", "fullstack",
+  "react", "node", "python", "javascript", "typescript", "java", "golang", "ruby",
+  "aws", "cloud", "devops", "kubernetes", "docker", "data", "ml", "ai", "mobile",
+  "ios", "android", "design", "product", "security", "api", "saas", "senior",
+]);
 
-function parseLeverCity(location: string): string {
-  if (!location) return "Remote";
-  const l = location.toLowerCase();
-  if (l.includes("remote")) return "Remote";
-  const map: Record<string, string> = {
-    "san francisco": "San Francisco", "los gatos": "San Francisco",
-    "los angeles": "San Francisco", "palo alto": "San Francisco",
-    "menlo park": "San Francisco", "sunnyvale": "San Francisco",
-    "mountain view": "San Francisco", "san jose": "San Francisco",
-    "new york": "New York", "seattle": "Seattle", "austin": "Austin",
-    "toronto": "Toronto", "london": "London", "amsterdam": "Amsterdam",
-    "berlin": "Berlin", "paris": "Paris", "singapore": "Singapore",
-    "sydney": "Sydney", "bangalore": "Bangalore", "bengaluru": "Bangalore",
-    "hyderabad": "Hyderabad", "dubai": "Dubai", "tokyo": "Tokyo",
-  };
-  for (const [key, city] of Object.entries(map)) {
-    if (l.includes(key)) return city;
-  }
-  return location.split(",")[0].trim() || "Remote";
-}
-
-function parseLeverCountry(location: string): string {
-  const l = location.toLowerCase();
-  if (l.includes("india") || l.includes("bangalore") || l.includes("hyderabad")) return "India";
-  if (l.includes("united kingdom") || l.includes("london") || l.includes(" uk")) return "UK";
-  if (l.includes("singapore")) return "Singapore";
-  if (l.includes("australia") || l.includes("sydney")) return "Australia";
-  if (l.includes("germany") || l.includes("berlin")) return "Germany";
-  if (l.includes("canada") || l.includes("toronto")) return "Canada";
-  return "USA";
-}
-
-function parseLeverJobType(commitment: string | undefined): "Remote" | "Full-time" | "Part-time" | "Hybrid" {
-  if (!commitment) return "Full-time";
-  const c = commitment.toLowerCase();
-  if (c.includes("remote")) return "Remote";
-  if (c.includes("hybrid")) return "Hybrid";
-  if (c.includes("part")) return "Part-time";
-  return "Full-time";
-}
-
-async function fetchOneLever(company: { slug: string; name: string; domain: string }): Promise<number> {
+export async function fetchFromRemoteOK(): Promise<number> {
   try {
-    const res = await axios.get(
-      `https://api.lever.co/v0/postings/${company.slug}?mode=json`,
-      { timeout: 8000 }
+    const res = await axios.get("https://remoteok.com/api", {
+      headers: { "User-Agent": "Mozilla/5.0 job-aggregator/1.0" },
+      timeout: 10000,
+    });
+    // First element is the legal notice object — skip it
+    const all: any[] = Array.isArray(res.data) ? res.data.slice(1) : [];
+    // Keep only jobs that have at least one recognised tech tag
+    const jobs = all.filter((j) =>
+      (j.tags ?? []).some((t: string) => REMOTEOK_TECH_TAGS.has(t.toLowerCase()))
     );
-    const jobs: any[] = Array.isArray(res.data) ? res.data : [];
+    if (!jobs.length) return 0;
+
     const rows = jobs.map((j) => {
-      const locationStr: string = j.categories?.location ?? "";
+      const logoUrl: string = j.company_logo ?? "";
+      let logoDomain: string | null = null;
+      try { logoDomain = new URL(logoUrl).hostname.replace("www.", ""); } catch {}
+
       return {
-        id: `lever-${company.slug}-${j.id}`,
-        title: j.text ?? "Software Engineer",
-        company: company.name,
-        logoDomain: company.domain,
-        companyType: inferCompanyType(company.name, undefined),
-        location: locationStr || company.name,
-        city: parseLeverCity(locationStr),
-        country: parseLeverCountry(locationStr),
+        id: `remoteok_${j.id}`,
+        title: j.position ?? "Software Engineer",
+        company: j.company ?? "Unknown",
+        logoDomain,
+        companyType: inferCompanyType(j.company ?? "", undefined),
+        location: "Remote Worldwide",
+        city: "Remote",
+        country: "Worldwide",
         lat: null as null,
         lng: null as null,
         minExp: 1,
         maxExp: 7,
-        salaryMin: null as null,
-        salaryMax: null as null,
+        salaryMin: j.salary_min ? Number(j.salary_min) : null,
+        salaryMax: j.salary_max ? Number(j.salary_max) : null,
         currency: "USD",
-        jobType: parseLeverJobType(j.categories?.commitment),
-        industry: inferIndustry(j.text),
-        skills: JSON.stringify(extractSkillsFromTitle(j.text ?? "")),
-        description: (j.descriptionPlain ?? j.description ?? "").replace(/<[^>]+>/g, "").slice(0, 2000),
-        applyUrl: j.hostedUrl ?? `https://jobs.lever.co/${company.slug}`,
-        source: "lever",
+        jobType: "Remote" as const,
+        industry: inferIndustry(j.position),
+        skills: JSON.stringify((j.tags ?? []).slice(0, 8)),
+        description: (j.description ?? "").replace(/<[^>]+>/g, "").slice(0, 2000),
+        applyUrl: j.url ?? `https://remoteok.com/remote-jobs/${j.id}`,
+        source: "remoteok",
         isActive: true,
-        postedAt: j.createdAt ? new Date(j.createdAt) : new Date(),
+        postedAt: j.date ? new Date(j.date) : new Date(),
       };
     });
-    if (!rows.length) return 0;
+
     const result = await prisma.job.createMany({ data: rows, skipDuplicates: true });
     return result.count;
   } catch (err) {
-    console.error(`[Lever] ${company.slug}:`, (err as Error).message);
+    console.error("[RemoteOK]:", (err as Error).message);
     return 0;
   }
-}
-
-export async function fetchFromLever(): Promise<number> {
-  const results = await Promise.allSettled(
-    LEVER_COMPANIES.map((c) => fetchOneLever(c))
-  );
-  return results.reduce((sum, r) => sum + (r.status === "fulfilled" ? r.value : 0), 0);
-}
-
-// ── Workday (free public REST API — no key needed) ─────────────────────────
-
-interface WorkdayCompany {
-  name: string;
-  domain: string;
-  apiUrl: string;
-  jobBaseUrl: string;
-}
-
-const WORKDAY_COMPANIES: WorkdayCompany[] = [
-  {
-    name: "Apple",
-    domain: "apple.com",
-    apiUrl: "https://apple.wd1.myworkdayjobs.com/wday/cxs/apple/US_Jobs/jobs",
-    jobBaseUrl: "https://apple.wd1.myworkdayjobs.com/en-US/US_Jobs",
-  },
-  {
-    name: "Adobe",
-    domain: "adobe.com",
-    apiUrl: "https://adobe.wd5.myworkdayjobs.com/wday/cxs/adobe/external_experienced/jobs",
-    jobBaseUrl: "https://adobe.wd5.myworkdayjobs.com/external_experienced",
-  },
-  {
-    name: "Salesforce",
-    domain: "salesforce.com",
-    apiUrl: "https://salesforce.wd1.myworkdayjobs.com/wday/cxs/Salesforce/External_Career_Site/jobs",
-    jobBaseUrl: "https://salesforce.wd1.myworkdayjobs.com/External_Career_Site",
-  },
-  {
-    name: "Workday",
-    domain: "workday.com",
-    apiUrl: "https://workday.wd5.myworkdayjobs.com/wday/cxs/workday/Workday/jobs",
-    jobBaseUrl: "https://workday.wd5.myworkdayjobs.com/Workday",
-  },
-];
-
-function parseWorkdayCity(locationsText: string | undefined): string {
-  if (!locationsText) return "Remote";
-  const l = locationsText.toLowerCase();
-  if (l.includes("remote")) return "Remote";
-  const map: Record<string, string> = {
-    "cupertino": "San Francisco", "san francisco": "San Francisco",
-    "san jose": "San Francisco", "sunnyvale": "San Francisco",
-    "mountain view": "San Francisco", "san mateo": "San Francisco",
-    "new york": "New York", "seattle": "Seattle", "austin": "Austin",
-    "toronto": "Toronto", "london": "London", "amsterdam": "Amsterdam",
-    "berlin": "Berlin", "paris": "Paris", "singapore": "Singapore",
-    "sydney": "Sydney", "bangalore": "Bangalore", "bengaluru": "Bangalore",
-    "hyderabad": "Hyderabad", "dubai": "Dubai", "tokyo": "Tokyo",
-  };
-  for (const [key, city] of Object.entries(map)) {
-    if (l.includes(key)) return city;
-  }
-  return locationsText.split(",")[0].trim() || "Remote";
-}
-
-function parseWorkdayCountry(locationsText: string | undefined): string {
-  if (!locationsText) return "USA";
-  const l = locationsText.toLowerCase();
-  if (l.includes("india") || l.includes("bangalore")) return "India";
-  if (l.includes("united kingdom") || l.includes("london")) return "UK";
-  if (l.includes("singapore")) return "Singapore";
-  if (l.includes("australia") || l.includes("sydney")) return "Australia";
-  if (l.includes("germany") || l.includes("berlin")) return "Germany";
-  if (l.includes("canada") || l.includes("toronto")) return "Canada";
-  return "USA";
-}
-
-function parseWorkdayJobType(bulletFields: string[] | undefined): "Remote" | "Full-time" | "Part-time" | "Hybrid" {
-  if (!bulletFields?.length) return "Full-time";
-  const text = bulletFields.join(" ").toLowerCase();
-  if (text.includes("remote")) return "Remote";
-  if (text.includes("hybrid")) return "Hybrid";
-  if (text.includes("part time") || text.includes("part-time")) return "Part-time";
-  return "Full-time";
-}
-
-function parseWorkdayDate(dateStr: string | undefined): Date {
-  if (!dateStr) return new Date();
-  // Workday uses MM/DD/YYYY
-  const parts = dateStr.split("/");
-  if (parts.length === 3) {
-    return new Date(`${parts[2]}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`);
-  }
-  return new Date(dateStr);
-}
-
-async function fetchOneWorkday(company: WorkdayCompany): Promise<number> {
-  try {
-    const res = await axios.post(
-      company.apiUrl,
-      { limit: 50, offset: 0, searchText: "" },
-      { headers: { "Content-Type": "application/json" }, timeout: 10000 }
-    );
-    const jobs: any[] = res.data?.jobPostings ?? [];
-    const rows = jobs.map((j) => {
-      const slug = j.jobPostingId ?? j.externalPath ?? Math.random().toString(36).slice(2);
-      const applyUrl = j.externalPath
-        ? `${company.jobBaseUrl}${j.externalPath}`
-        : company.jobBaseUrl;
-      return {
-        id: `workday-${company.name.toLowerCase().replace(/\s+/g, "-")}-${slug}`,
-        title: j.title ?? "Software Engineer",
-        company: company.name,
-        logoDomain: company.domain,
-        companyType: "MNC" as const,
-        location: j.locationsText || company.name,
-        city: parseWorkdayCity(j.locationsText),
-        country: parseWorkdayCountry(j.locationsText),
-        lat: null as null,
-        lng: null as null,
-        minExp: 1,
-        maxExp: 7,
-        salaryMin: null as null,
-        salaryMax: null as null,
-        currency: "USD",
-        jobType: parseWorkdayJobType(j.bulletFields),
-        industry: inferIndustry(j.title),
-        skills: JSON.stringify(extractSkillsFromTitle(j.title ?? "")),
-        description: "",
-        applyUrl,
-        source: "workday",
-        isActive: true,
-        postedAt: parseWorkdayDate(j.postedOn),
-      };
-    });
-    if (!rows.length) return 0;
-    const result = await prisma.job.createMany({ data: rows, skipDuplicates: true });
-    return result.count;
-  } catch (err) {
-    console.error(`[Workday] ${company.name}:`, (err as Error).message);
-    return 0;
-  }
-}
-
-export async function fetchFromWorkday(): Promise<number> {
-  const results = await Promise.allSettled(
-    WORKDAY_COMPANIES.map((c) => fetchOneWorkday(c))
-  );
-  return results.reduce((sum, r) => sum + (r.status === "fulfilled" ? r.value : 0), 0);
 }
 
 // ── Greenhouse ─────────────────────────────────────────────────────────────
@@ -527,6 +339,13 @@ const GREENHOUSE_COMPANIES: { slug: string; name: string; domain: string }[] = [
   { slug: "canva", name: "Canva", domain: "canva.com" },
   { slug: "coinbase", name: "Coinbase", domain: "coinbase.com" },
   { slug: "doordash", name: "DoorDash", domain: "doordash.com" },
+  { slug: "roblox", name: "Roblox", domain: "roblox.com" },
+  { slug: "gusto", name: "Gusto", domain: "gusto.com" },
+  { slug: "pinterest", name: "Pinterest", domain: "pinterest.com" },
+  { slug: "dropbox", name: "Dropbox", domain: "dropbox.com" },
+  { slug: "checkr", name: "Checkr", domain: "checkr.com" },
+  { slug: "block", name: "Block", domain: "block.xyz" },
+  { slug: "instacart", name: "Instacart", domain: "instacart.com" },
 ];
 
 function parseGreenhouseCity(locationName: string | undefined): string {
@@ -617,13 +436,12 @@ export async function fetchFromGreenhouse(): Promise<number> {
 
 // Run all sources in parallel and return total new jobs
 export async function fetchAllSources(): Promise<{ total: number; breakdown: Record<string, number> }> {
-  const [jsearch, adzuna, remotive, greenhouse, lever, workday] = await Promise.allSettled([
+  const [jsearch, adzuna, remotive, greenhouse, remoteok] = await Promise.allSettled([
     fetchFromJSearch(),
     fetchFromAdzuna(),
     fetchFromRemotive(),
     fetchFromGreenhouse(),
-    fetchFromLever(),
-    fetchFromWorkday(),
+    fetchFromRemoteOK(),
   ]);
 
   const counts = {
@@ -631,8 +449,7 @@ export async function fetchAllSources(): Promise<{ total: number; breakdown: Rec
     adzuna:     adzuna.status     === "fulfilled" ? adzuna.value     : 0,
     remotive:   remotive.status   === "fulfilled" ? remotive.value   : 0,
     greenhouse: greenhouse.status === "fulfilled" ? greenhouse.value : 0,
-    lever:      lever.status      === "fulfilled" ? lever.value      : 0,
-    workday:    workday.status    === "fulfilled" ? workday.value    : 0,
+    remoteok:   remoteok.status   === "fulfilled" ? remoteok.value   : 0,
   };
 
   return {
