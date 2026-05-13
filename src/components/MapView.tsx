@@ -37,19 +37,43 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "Seattle": [47.6062, -122.3321],
 };
 
-function getCoords(job: Job): [number, number] | null {
-  if (job.lat && job.lng) return [job.lat, job.lng];
-  return CITY_COORDS[job.city] ?? null;
+// Map obscure / small cities → nearest major hub so the globe stays clean
+const CITY_NORMALIZE: Record<string, string> = {
+  "Bengaluru": "Bangalore", "Bagaluru": "Bangalore", "Dharwad": "Bangalore",
+  "Mysuru": "Bangalore", "Mysore": "Bangalore", "Mangalore": "Bangalore",
+  "Hubli": "Bangalore",
+  "Akurdi": "Pune", "Pimpri": "Pune", "Pimpri-Chinchwad": "Pune",
+  "Pimp": "Pune", "Chinchwad": "Pune", "Talegaon": "Pune",
+  "Navi Mumbai": "Mumbai", "Thane": "Mumbai", "Kalyan": "Mumbai",
+  "Vasai": "Mumbai", "Panvel": "Mumbai",
+  "Savli": "Ahmedabad", "Vadodara": "Ahmedabad", "Surat": "Ahmedabad",
+  "Gandhinagar": "Ahmedabad", "Rajkot": "Ahmedabad",
+  "Secunderabad": "Hyderabad", "Warangal": "Hyderabad",
+  "Nirsa": "Kolkata", "Dhanbad": "Kolkata", "Durgapur": "Kolkata",
+  "Asansol": "Kolkata",
+  "Madurai": "Chennai", "Thoothukudi": "Chennai", "Tiruchirappalli": "Chennai",
+  "Tuticorin": "Chennai", "Salem": "Chennai", "Vellore": "Chennai",
+  "Ludhiana": "Chandigarh", "Amritsar": "Chandigarh", "Jalandhar": "Chandigarh",
+  "Ghaziabad": "Delhi NCR", "Faridabad": "Delhi NCR", "Meerut": "Delhi NCR",
+  "Greater Noida": "Noida",
+  "Kasa": "Mumbai", "wad": "Pune", "am": "Hyderabad", "ravaram": "Hyderabad",
+};
+
+function normalizeCity(city: string): string | null {
+  if (!city || city === "Remote" || city === "Unknown") return null;
+  if (CITY_COORDS[city]) return city;
+  return CITY_NORMALIZE[city] ?? null;
 }
 
 function groupByCity(jobs: Job[]): Map<string, { coords: [number, number]; jobs: Job[] }> {
   const map = new Map<string, { coords: [number, number]; jobs: Job[] }>();
   for (const job of jobs) {
-    const coords = getCoords(job);
+    const city = normalizeCity(job.city);
+    if (!city) continue;
+    const coords = CITY_COORDS[city];
     if (!coords) continue;
-    const key = job.city || "Unknown";
-    if (!map.has(key)) map.set(key, { coords, jobs: [] });
-    map.get(key)!.jobs.push(job);
+    if (!map.has(city)) map.set(city, { coords, jobs: [] });
+    map.get(city)!.jobs.push(job);
   }
   return map;
 }
@@ -71,16 +95,16 @@ function buildMarkerEl(
   isSelected: boolean,
   onClick: () => void
 ): HTMLElement {
-  const size = isSelected ? 46 : 38;
-  const imgSize = size - 10;
-  const borderColor = isSelected ? "#fbbf24" : "rgba(255,255,255,0.92)";
+  const size = isSelected ? 62 : 50;
+  const imgSize = size - 12;
+  const borderColor = isSelected ? "#fbbf24" : "rgba(255,255,255,0.95)";
   const badgeBg = isSelected ? "#fbbf24" : "#6366f1";
   const badgeColor = isSelected ? "#1e1b4b" : "white";
   const glowShadow = isSelected
-    ? "0 0 0 3px rgba(251,191,36,0.35), 0 6px 24px rgba(0,0,0,0.7)"
-    : "0 4px 16px rgba(0,0,0,0.6)";
-  const labelColor = isSelected ? "#fbbf24" : "rgba(255,255,255,0.9)";
-  const labelBorder = isSelected ? "rgba(251,191,36,0.4)" : "rgba(129,140,248,0.35)";
+    ? "0 0 0 4px rgba(251,191,36,0.45), 0 8px 32px rgba(0,0,0,0.8)"
+    : "0 4px 20px rgba(0,0,0,0.7), 0 0 0 2px rgba(255,255,255,0.15)";
+  const labelColor = isSelected ? "#fbbf24" : "white";
+  const labelBorder = isSelected ? "rgba(251,191,36,0.5)" : "rgba(129,140,248,0.4)";
   const countLabel = count > 99 ? "99+" : String(count);
 
   const logoSrc = topDomain
@@ -131,16 +155,17 @@ function buildMarkerEl(
         line-height:1;
       ">${countLabel}</div>
       <div style="
-        margin-top:4px;
-        background:rgba(8,12,30,0.88);
+        margin-top:5px;
+        background:rgba(8,12,30,0.92);
         color:${labelColor};
-        font-size:9px;font-weight:700;
-        padding:2px 7px;border-radius:5px;
+        font-size:10px;font-weight:700;
+        padding:3px 9px;border-radius:6px;
         white-space:nowrap;
         font-family:Inter,sans-serif;
         border:1px solid ${labelBorder};
-        letter-spacing:0.01em;
-      ">${city}</div>
+        letter-spacing:0.02em;
+        box-shadow:0 2px 8px rgba(0,0,0,0.5);
+      ">${city} <span style="opacity:0.7;font-weight:500">(${count})</span></div>
     </div>
   `;
 
