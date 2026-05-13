@@ -63,8 +63,79 @@ RESEND_API_KEY=your_resend_key_here
 CRON_SECRET=any_random_string_here
 ```
 
-> **Note:** For `DATABASE_URL`, I'm using [Neon](https://neon.tech) free tier (serverless Postgres). You can use any Postgres instance — just swap the connection string.
-> For job data, sign up at [RapidAPI](https://rapidapi.com) and subscribe to the JSearch API (free tier gives 200 requests/month which is enough).
+All four of these are needed for the app to work properly. Here's exactly where to get each one:
+
+---
+
+## API keys & services
+
+This project uses 3 external services. All of them have free tiers that are more than enough for personal use.
+
+---
+
+### 1. Neon — Database (`DATABASE_URL`)
+
+Neon is a serverless Postgres provider. The free tier gives you 0.5 GB storage and it's honestly plenty for this.
+
+**How to get it:**
+1. Go to [neon.tech](https://neon.tech) and create a free account
+2. Create a new project (pick the region closest to you — I used Singapore)
+3. Once the project is created, go to the **Dashboard** → click **Connect**
+4. Copy the connection string — it looks like:
+   ```
+   postgresql://username:password@ep-something.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+   ```
+5. Paste that as `DATABASE_URL` in your `.env.local`
+
+> If you already have a Postgres instance (Supabase, Railway, local Docker), you can use that too — just swap the connection string.
+
+---
+
+### 2. RapidAPI / JSearch — Job data (`RAPIDAPI_KEY`)
+
+JSearch is the API that actually fetches job listings from LinkedIn, Indeed, Glassdoor etc. It's available on RapidAPI. The free plan gives **200 requests/month** which is enough since this app only fetches every 2 days (roughly 15 requests/month).
+
+**How to get it:**
+1. Sign up at [rapidapi.com](https://rapidapi.com)
+2. Search for **JSearch** in the API marketplace
+3. Click **Subscribe to Test** → select the **Basic (Free)** plan — 200 req/month, no credit card needed
+4. Go to the **Endpoints** tab → you'll see your API key in the right panel under `X-RapidAPI-Key`
+5. Copy that key and paste it as `RAPIDAPI_KEY` in `.env.local`
+
+The key looks something like: `abc123xyz456msh789abc123jsn456def789`
+
+> **Heads up:** Don't run manual refreshes too often or you'll burn through the 200 request limit quickly. The cron is set to every 2 days specifically to stay well within the limit.
+
+---
+
+### 3. Resend — Email alerts (`RESEND_API_KEY`)
+
+Resend handles sending the job alert digest emails. Their free tier allows **3,000 emails/month** and up to 100/day which is more than enough.
+
+**How to get it:**
+1. Go to [resend.com](https://resend.com) and create a free account
+2. From the dashboard, click **API Keys** in the left sidebar
+3. Click **Create API Key** → give it a name (e.g. `job-tracker`) → click **Add**
+4. Copy the key immediately — it's only shown once. It starts with `re_`
+5. Paste it as `RESEND_API_KEY` in `.env.local`
+
+The key looks like: `re_aBcDeFgH_1234567890abcdefgh`
+
+> **Important limitation:** Without a verified domain, Resend only lets you send emails *to your own account email* (the one you signed up with). So for testing, alert emails will only land in your inbox. To send to other users, you'd need to verify a custom domain in the Resend dashboard under **Domains**.
+
+---
+
+### 4. Cron secret (`CRON_SECRET`)
+
+This isn't from any service — just make up a random string yourself. It's used to protect the `/api/cron/refresh` and `/api/cron/alerts` endpoints so nobody can trigger them by hitting the URL directly.
+
+Something like `myjobtracker-cron-2024` works fine, or generate a random one:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+---
 
 ### 3. Push the schema and seed
 
@@ -171,14 +242,16 @@ The build command is `prisma generate && next build` (already set in `package.js
 
 ---
 
-## Environment variables summary
+## Environment variables — quick reference
 
-| Variable | Where to get it |
-|---|---|
-| `DATABASE_URL` | Neon dashboard → Connection string |
-| `RAPIDAPI_KEY` | RapidAPI → JSearch API → Subscribe → API Key |
-| `RESEND_API_KEY` | resend.com → API Keys |
-| `CRON_SECRET` | Make up any random string |
+| Variable | Service | Free tier | Used for |
+|---|---|---|---|
+| `DATABASE_URL` | [Neon](https://neon.tech) | 0.5 GB storage | Storing all jobs, alerts, applications |
+| `RAPIDAPI_KEY` | [RapidAPI / JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) | 200 req/month | Fetching live job listings |
+| `RESEND_API_KEY` | [Resend](https://resend.com) | 3,000 emails/month | Sending job alert digest emails |
+| `CRON_SECRET` | — (make your own) | — | Protecting cron endpoints from public access |
+
+See the **API keys & services** section above for step-by-step setup for each one.
 
 ---
 
