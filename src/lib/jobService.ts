@@ -45,12 +45,11 @@ async function fetchOneJSearch(q: string, apiKey: string): Promise<number> {
       timeout: 8000,
     });
     const jobs = res.data?.data ?? [];
-    let count = 0;
-    for (const j of jobs) {
+    const rows = jobs.map((j: any) => {
       const expMonths = j.job_required_experience?.required_experience_in_months ?? 0;
       const minExp = Math.max(1, Math.floor(expMonths / 12));
-      const maxExp = Math.min(10, minExp + 2);
-      const jobData = {
+      return {
+        id: j.job_id,
         title: j.job_title ?? "Software Engineer",
         company: j.employer_name ?? "Unknown Company",
         logoDomain: extractDomain(j.employer_website),
@@ -60,7 +59,8 @@ async function fetchOneJSearch(q: string, apiKey: string): Promise<number> {
         country: j.job_country || "India",
         lat: j.job_latitude ?? null,
         lng: j.job_longitude ?? null,
-        minExp, maxExp,
+        minExp,
+        maxExp: Math.min(10, minExp + 2),
         salaryMin: j.job_min_salary ? Math.round(j.job_min_salary) : null,
         salaryMax: j.job_max_salary ? Math.round(j.job_max_salary) : null,
         currency: j.job_salary_currency || "INR",
@@ -73,16 +73,10 @@ async function fetchOneJSearch(q: string, apiKey: string): Promise<number> {
         isActive: true,
         postedAt: j.job_posted_at_datetime_utc ? new Date(j.job_posted_at_datetime_utc) : new Date(),
       };
-      try {
-        await prisma.job.upsert({
-          where: { id: j.job_id },
-          update: { isActive: true, updatedAt: new Date() },
-          create: { id: j.job_id, ...jobData },
-        });
-        count++;
-      } catch { /* skip */ }
-    }
-    return count;
+    }).filter((r: any) => r.id);
+    if (!rows.length) return 0;
+    const result = await prisma.job.createMany({ data: rows, skipDuplicates: true });
+    return result.count;
   } catch (err) {
     console.error(`[JSearch] "${q}":`, (err as Error).message);
     return 0;
@@ -321,14 +315,10 @@ async function fetchOneGreenhouse(company: { slug: string; name: string; domain:
       { timeout: 8000 }
     );
     const jobs: any[] = res.data?.jobs ?? [];
-    let count = 0;
-
-    for (const j of jobs) {
-      const id = `greenhouse-${company.slug}-${j.id}`;
+    const rows = jobs.map((j) => {
       const city = parseGreenhouseCity(j.location?.name);
-      const isRemote = city === "Remote";
-
-      const jobData = {
+      return {
+        id: `greenhouse-${company.slug}-${j.id}`,
         title: j.title ?? "Software Engineer",
         company: company.name,
         logoDomain: company.domain,
@@ -343,7 +333,7 @@ async function fetchOneGreenhouse(company: { slug: string; name: string; domain:
         salaryMin: null as null,
         salaryMax: null as null,
         currency: "USD",
-        jobType: isRemote ? "Remote" : ("Full-time" as const),
+        jobType: city === "Remote" ? "Remote" : ("Full-time" as const),
         industry: inferIndustry(j.title),
         skills: JSON.stringify(extractSkillsFromTitle(j.title)),
         description: (j.content ?? "").replace(/<[^>]+>/g, "").slice(0, 2000),
@@ -352,17 +342,11 @@ async function fetchOneGreenhouse(company: { slug: string; name: string; domain:
         isActive: true,
         postedAt: j.updated_at ? new Date(j.updated_at) : new Date(),
       };
-
-      try {
-        await prisma.job.upsert({
-          where: { id },
-          update: { isActive: true, updatedAt: new Date() },
-          create: { id, ...jobData },
-        });
-        count++;
-      } catch { /* skip duplicates */ }
-    }
-    return count;
+    });
+    if (!rows.length) return 0;
+    // One batch insert instead of N individual upserts — ~100x faster
+    const result = await prisma.job.createMany({ data: rows, skipDuplicates: true });
+    return result.count;
   } catch (err) {
     console.error(`[Greenhouse] ${company.slug}:`, (err as Error).message);
     return 0;
